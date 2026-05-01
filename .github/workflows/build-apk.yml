@@ -93,9 +93,8 @@ jobs:
             - **Build:** #${{ github.run_number }}
             - **Commit:** ${{ github.sha }}
             - **Branch:** ${{ github.ref_name }}
-            - **签名 Release APK：** ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && '✅ 已签名' || '⚠️ 未配置（secrets 缺失）' }}
 
-            > Debug APK 仅供测试，Release APK 可正常覆盖安装。
+            > Debug APK 仅供测试；若 Release APK 存在则签名稳定，可直接覆盖安装。
 
       # ── 飞书通知 ──────────────────────────────────────────────────────
       - name: Notify Feishu on success
