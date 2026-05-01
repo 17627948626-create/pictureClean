@@ -1,0 +1,13 @@
+# Android
+*.jks
+*.keystore
+local.properties
+.gradle/
+build/
+*.apk
+*.aab
+
+# IDE
+.idea/
+*.iml
+.DS_Store

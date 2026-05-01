@@ -22,7 +22,12 @@ Android 照片管理应用，支持滑动快速删除照片。
 https://github.com/17627948626-create/pictureClean/releases
 ```
 
-找到最新的 `Debug Build #N`，点击 `YiHua-debug-N.apk` 即可下载。
+每次构建会同时上传：
+
+| 文件 | 说明 |
+|------|------|
+| `YiHua-debug-N.apk` | Debug APK，始终构建，签名不稳定 |
+| `YiHua-release-N.apk` | Signed Release APK，需配置 secrets |
 
 ### 安卓手机如何安装 APK
 
@@ -31,25 +36,43 @@ https://github.com/17627948626-create/pictureClean/releases
 3. 进入 **设置 → 安全 → 安装未知应用**，允许浏览器安装。
 4. 返回点击 APK，按提示安装即可。
 
-### Debug APK 覆盖安装失败怎么办
+> **推荐安装 Release APK**，签名稳定，支持直接覆盖安装升级。
 
-Debug APK 每次构建的签名可能不同，导致覆盖安装报错「签名不一致」。
+---
 
-**解决方法**：先卸载旧版本，再安装新版。
+## 配置签名（Signed Release APK）
 
-### 后续如何升级为稳定签名 Release APK
+### 第一步：生成 keystore 文件
 
-1. 生成 keystore 签名文件：
-   ```bash
-   keytool -genkey -v -keystore release.jks -alias yihua \
-     -keyalg RSA -keysize 2048 -validity 10000
-   ```
-2. 将以下内容添加到 GitHub 仓库 Secrets：
-   - `KEYSTORE_BASE64`：keystore 文件的 base64 编码
-   - `KEY_ALIAS`：alias 名称
-   - `KEY_PASSWORD`：key 密码
-   - `STORE_PASSWORD`：store 密码
-3. 在 `app/build.gradle.kts` 中配置 `signingConfigs`，在 workflow 中添加签名步骤。
+```bash
+keytool -genkey -v -keystore release.jks -alias yihua \
+  -keyalg RSA -keysize 2048 -validity 10000
+```
+
+按提示填写密码和信息。生成的 `release.jks` 文件**不要提交到 Git**。
+
+### 第二步：将 keystore 转为 Base64
+
+```bash
+base64 -i release.jks | tr -d '\n'
+```
+
+复制输出的完整字符串，备用。
+
+### 第三步：在 GitHub 仓库配置 Secrets
+
+进入仓库 **Settings → Secrets and variables → Actions → New repository secret**，添加以下 4 个 Secret：
+
+| Secret 名称 | 填写内容 |
+|-------------|----------|
+| `ANDROID_KEYSTORE_BASE64` | 上一步复制的 Base64 字符串 |
+| `ANDROID_KEYSTORE_PASSWORD` | keystore 的 store 密码 |
+| `ANDROID_KEY_ALIAS` | 生成时填写的 alias（如 `yihua`） |
+| `ANDROID_KEY_PASSWORD` | alias 对应的 key 密码 |
+
+### 验证
+
+配置完成后，推送任意 commit 触发构建。构建成功后 Release 页面会出现 `YiHua-release-N.apk`，Release 说明中会显示 **✅ 已签名**。
 
 ---
 
