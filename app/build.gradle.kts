@@ -25,14 +25,14 @@ android {
     // 因此 release 签名统一使用 storePassword 读取 key，避免 packageRelease 解密失败。
     val keystorePath = System.getenv("SIGNING_KEYSTORE_PATH")
     val keystorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
-    val keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+    val releaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
 
-    if (!keystorePath.isNullOrBlank() && !keystorePassword.isNullOrBlank() && !keyAlias.isNullOrBlank()) {
+    if (!keystorePath.isNullOrBlank() && !keystorePassword.isNullOrBlank() && !releaseKeyAlias.isNullOrBlank()) {
         signingConfigs {
             create("release") {
                 storeFile = file(keystorePath)
                 storePassword = keystorePassword
-                keyAlias = keyAlias
+                keyAlias = releaseKeyAlias
                 keyPassword = keystorePassword
             }
         }
