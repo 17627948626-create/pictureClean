@@ -217,21 +217,21 @@ private fun PhotoContent(
                                                     )
                                                     viewModel.swipeUp()
                                                 }
-                                                // 右滑：下一张
+                                                // 右滑：上一张
                                                 horizontalAbs > verticalAbs && x > threshold -> {
                                                     offsetX.animateTo(
                                                         size.width.toFloat(),
                                                         animationSpec = spring(stiffness = Spring.StiffnessMedium)
                                                     )
-                                                    viewModel.swipeRight()
+                                                    viewModel.swipeLeft()
                                                 }
-                                                // 左滑：上一张
+                                                // 左滑：下一张
                                                 horizontalAbs > verticalAbs && x < -threshold -> {
                                                     offsetX.animateTo(
                                                         -size.width.toFloat(),
                                                         animationSpec = spring(stiffness = Spring.StiffnessMedium)
                                                     )
-                                                    viewModel.swipeLeft()
+                                                    viewModel.swipeRight()
                                                 }
                                                 // 未达到阈值，弹回
                                                 else -> {
@@ -308,8 +308,8 @@ private fun PhotoContent(
 @Composable
 private fun SwipeHintLabel(direction: SwipeDirection, modifier: Modifier = Modifier) {
     val (text, color) = when (direction) {
-        SwipeDirection.RIGHT -> "下一张 →" to SwipeRightColor
-        SwipeDirection.LEFT -> "← 上一张" to SwipeLeftColor
+        SwipeDirection.RIGHT -> "上一张 →" to SwipeRightColor
+        SwipeDirection.LEFT -> "← 下一张" to SwipeLeftColor
         SwipeDirection.UP -> "↑ 加入待删除" to SwipeUpColor
     }
     Box(
