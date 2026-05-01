@@ -1,9 +1,10 @@
 package com.yihua.app.ui.screens
 
 import android.os.Build
-import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -54,6 +55,21 @@ import java.util.Locale
 import kotlin.math.abs
 
 private enum class GestureAxis { HORIZONTAL, VERTICAL }
+
+private suspend fun animateFloat(
+    initialValue: Float,
+    targetValue: Float,
+    animationSpec: AnimationSpec<Float>,
+    onValue: (Float) -> Unit
+) {
+    animate(
+        initialValue = initialValue,
+        targetValue = targetValue,
+        animationSpec = animationSpec
+    ) { value, _ ->
+        onValue(value)
+    }
+}
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -156,26 +172,27 @@ private fun PhotoContent(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
 
-    // 手势动画
-    val horizontalOffset = remember { Animatable(0f) }
-    val verticalOffset = remember { Animatable(0f) }
-    val cardScale = remember { Animatable(1f) }
-    val cardAlpha = remember { Animatable(1f) }
+    var horizontalOffset by remember { mutableFloatStateOf(0f) }
+    var verticalOffset by remember { mutableFloatStateOf(0f) }
+    var cardScale by remember { mutableFloatStateOf(1f) }
+    var cardAlpha by remember { mutableFloatStateOf(1f) }
     var gestureAxis by remember { mutableStateOf<GestureAxis?>(null) }
     var isUndoAnimating by remember { mutableStateOf(false) }
 
-    // 卡片尺寸
     var cardWidthPx by remember { mutableFloatStateOf(0f) }
     var cardHeightPx by remember { mutableFloatStateOf(0f) }
     val gapPx = with(LocalDensity.current) { 16.dp.toPx() }
 
-    // currentIndex 变化时重置动画
+    fun resetCardTransform() {
+        horizontalOffset = 0f
+        verticalOffset = 0f
+        cardScale = 1f
+        cardAlpha = 1f
+    }
+
     LaunchedEffect(state.currentIndex) {
         if (!isUndoAnimating) {
-            horizontalOffset.snapTo(0f)
-            verticalOffset.snapTo(0f)
-            cardScale.snapTo(1f)
-            cardAlpha.snapTo(1f)
+            resetCardTransform()
         }
         gestureAxis = null
     }
@@ -207,7 +224,6 @@ private fun PhotoContent(
                 }
             }
             else -> {
-                // 顶栏
                 TopBar(
                     currentPhoto = state.currentPhoto,
                     currentIndex = state.currentIndex,
@@ -216,7 +232,6 @@ private fun PhotoContent(
                     onTrashClick = onNavigateToConfirm
                 )
 
-                // 照片卡片区域
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -226,136 +241,234 @@ private fun PhotoContent(
                             cardWidthPx = it.width.toFloat()
                             cardHeightPx = it.height.toFloat()
                         }
-                        .pointerInput(state.currentIndex) {
-                            var axisDetermined = false
+                        .pointerInput(state.currentIndex, state.photos.size) {
                             var lockedAxis: GestureAxis? = null
+                            var totalDragX = 0f
+                            var totalDragY = 0f
+
+                            fun clearDragState() {
+                                lockedAxis = null
+                                totalDragX = 0f
+                                totalDragY = 0f
+                                gestureAxis = null
+                            }
 
                             detectDragGestures(
                                 onDragEnd = {
                                     val threshold = 100f
+                                    val dragAxis = lockedAxis
+
                                     scope.launch {
-                                        when (lockedAxis) {
+                                        when (dragAxis) {
                                             GestureAxis.HORIZONTAL -> {
-                                                val x = horizontalOffset.value
+                                                val x = horizontalOffset
                                                 when {
-                                                    // 右划：上一张
                                                     x > threshold && state.currentIndex > 0 -> {
-                                                        horizontalOffset.animateTo(
-                                                            cardWidthPx + gapPx,
-                                                            tween(300, easing = FastOutSlowInEasing)
-                                                        )
+                                                        animateFloat(
+                                                            initialValue = horizontalOffset,
+                                                            targetValue = cardWidthPx + gapPx,
+                                                            animationSpec = tween(260, easing = FastOutSlowInEasing)
+                                                        ) { horizontalOffset = it }
                                                         viewModel.swipeLeft()
+                                                        resetCardTransform()
                                                     }
-                                                    // 左划：下一张
                                                     x < -threshold && state.currentIndex < state.photos.size - 1 -> {
-                                                        horizontalOffset.animateTo(
-                                                            -(cardWidthPx + gapPx),
-                                                            tween(300, easing = FastOutSlowInEasing)
-                                                        )
+                                                        animateFloat(
+                                                            initialValue = horizontalOffset,
+                                                            targetValue = -(cardWidthPx + gapPx),
+                                                            animationSpec = tween(260, easing = FastOutSlowInEasing)
+                                                        ) { horizontalOffset = it }
                                                         viewModel.swipeRight()
+                                                        resetCardTransform()
                                                     }
                                                     else -> {
-                                                        horizontalOffset.animateTo(
-                                                            0f,
-                                                            spring(dampingRatio = Spring.DampingRatioLowBouncy)
-                                                        )
+                                                        animateFloat(
+                                                            initialValue = horizontalOffset,
+                                                            targetValue = 0f,
+                                                            animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy)
+                                                        ) { horizontalOffset = it }
                                                     }
                                                 }
                                             }
                                             GestureAxis.VERTICAL -> {
-                                                val y = verticalOffset.value
+                                                val y = verticalOffset
                                                 when {
-                                                    // 上滑：标记删除
                                                     y < -threshold -> {
-                                                        launch { verticalOffset.animateTo(-cardHeightPx, tween(350, easing = FastOutSlowInEasing)) }
-                                                        launch { cardScale.animateTo(0.5f, tween(350, easing = FastOutSlowInEasing)) }
-                                                        launch { cardAlpha.animateTo(0f, tween(350, easing = FastOutSlowInEasing)) }
+                                                        val yJob = launch {
+                                                            animateFloat(
+                                                                initialValue = verticalOffset,
+                                                                targetValue = -cardHeightPx,
+                                                                animationSpec = tween(300, easing = FastOutSlowInEasing)
+                                                            ) { verticalOffset = it }
+                                                        }
+                                                        val scaleJob = launch {
+                                                            animateFloat(
+                                                                initialValue = cardScale,
+                                                                targetValue = 0.5f,
+                                                                animationSpec = tween(300, easing = FastOutSlowInEasing)
+                                                            ) { cardScale = it }
+                                                        }
+                                                        val alphaJob = launch {
+                                                            animateFloat(
+                                                                initialValue = cardAlpha,
+                                                                targetValue = 0f,
+                                                                animationSpec = tween(300, easing = FastOutSlowInEasing)
+                                                            ) { cardAlpha = it }
+                                                        }
+                                                        yJob.join()
+                                                        scaleJob.join()
+                                                        alphaJob.join()
                                                         viewModel.swipeUp()
+                                                        resetCardTransform()
                                                     }
-                                                    // 下滑：撤销删除
                                                     y > threshold -> {
+                                                        isUndoAnimating = true
                                                         val didUndo = viewModel.undoDelete()
                                                         if (didUndo) {
-                                                            isUndoAnimating = true
-                                                            // 先设置到飞走状态
-                                                            verticalOffset.snapTo(-cardHeightPx)
-                                                            cardScale.snapTo(0.5f)
-                                                            cardAlpha.snapTo(0f)
-                                                            // 反向飞回
-                                                            launch { verticalOffset.animateTo(0f, tween(350, easing = FastOutSlowInEasing)) }
-                                                            launch { cardScale.animateTo(1f, tween(350, easing = FastOutSlowInEasing)) }
-                                                            launch { cardAlpha.animateTo(1f, tween(350, easing = FastOutSlowInEasing)) }
-                                                            isUndoAnimating = false
+                                                            verticalOffset = -cardHeightPx
+                                                            cardScale = 0.5f
+                                                            cardAlpha = 0f
+
+                                                            val yJob = launch {
+                                                                animateFloat(
+                                                                    initialValue = verticalOffset,
+                                                                    targetValue = 0f,
+                                                                    animationSpec = tween(300, easing = FastOutSlowInEasing)
+                                                                ) { verticalOffset = it }
+                                                            }
+                                                            val scaleJob = launch {
+                                                                animateFloat(
+                                                                    initialValue = cardScale,
+                                                                    targetValue = 1f,
+                                                                    animationSpec = tween(300, easing = FastOutSlowInEasing)
+                                                                ) { cardScale = it }
+                                                            }
+                                                            val alphaJob = launch {
+                                                                animateFloat(
+                                                                    initialValue = cardAlpha,
+                                                                    targetValue = 1f,
+                                                                    animationSpec = tween(300, easing = FastOutSlowInEasing)
+                                                                ) { cardAlpha = it }
+                                                            }
+                                                            yJob.join()
+                                                            scaleJob.join()
+                                                            alphaJob.join()
                                                         } else {
-                                                            verticalOffset.animateTo(
-                                                                0f,
-                                                                spring(dampingRatio = Spring.DampingRatioLowBouncy)
-                                                            )
+                                                            animateFloat(
+                                                                initialValue = verticalOffset,
+                                                                targetValue = 0f,
+                                                                animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy)
+                                                            ) { verticalOffset = it }
                                                         }
+                                                        isUndoAnimating = false
+                                                        resetCardTransform()
                                                     }
                                                     else -> {
-                                                        launch { verticalOffset.animateTo(0f, spring(dampingRatio = Spring.DampingRatioLowBouncy)) }
-                                                        launch { cardScale.animateTo(1f, spring()) }
-                                                        launch { cardAlpha.animateTo(1f, spring()) }
+                                                        val yJob = launch {
+                                                            animateFloat(
+                                                                initialValue = verticalOffset,
+                                                                targetValue = 0f,
+                                                                animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy)
+                                                            ) { verticalOffset = it }
+                                                        }
+                                                        val scaleJob = launch {
+                                                            animateFloat(
+                                                                initialValue = cardScale,
+                                                                targetValue = 1f,
+                                                                animationSpec = spring()
+                                                            ) { cardScale = it }
+                                                        }
+                                                        val alphaJob = launch {
+                                                            animateFloat(
+                                                                initialValue = cardAlpha,
+                                                                targetValue = 1f,
+                                                                animationSpec = spring()
+                                                            ) { cardAlpha = it }
+                                                        }
+                                                        yJob.join()
+                                                        scaleJob.join()
+                                                        alphaJob.join()
                                                     }
                                                 }
                                             }
-                                            null -> {}
+                                            null -> resetCardTransform()
                                         }
                                     }
-                                    axisDetermined = false
-                                    lockedAxis = null
-                                    gestureAxis = null
+                                    clearDragState()
                                 },
                                 onDragCancel = {
                                     scope.launch {
-                                        launch { horizontalOffset.animateTo(0f, spring()) }
-                                        launch { verticalOffset.animateTo(0f, spring()) }
-                                        launch { cardScale.animateTo(1f, spring()) }
-                                        launch { cardAlpha.animateTo(1f, spring()) }
+                                        val xJob = launch {
+                                            animateFloat(
+                                                initialValue = horizontalOffset,
+                                                targetValue = 0f,
+                                                animationSpec = spring()
+                                            ) { horizontalOffset = it }
+                                        }
+                                        val yJob = launch {
+                                            animateFloat(
+                                                initialValue = verticalOffset,
+                                                targetValue = 0f,
+                                                animationSpec = spring()
+                                            ) { verticalOffset = it }
+                                        }
+                                        val scaleJob = launch {
+                                            animateFloat(
+                                                initialValue = cardScale,
+                                                targetValue = 1f,
+                                                animationSpec = spring()
+                                            ) { cardScale = it }
+                                        }
+                                        val alphaJob = launch {
+                                            animateFloat(
+                                                initialValue = cardAlpha,
+                                                targetValue = 1f,
+                                                animationSpec = spring()
+                                            ) { cardAlpha = it }
+                                        }
+                                        xJob.join()
+                                        yJob.join()
+                                        scaleJob.join()
+                                        alphaJob.join()
                                     }
-                                    axisDetermined = false
-                                    lockedAxis = null
-                                    gestureAxis = null
+                                    clearDragState()
                                 },
                                 onDrag = { change, dragAmount ->
                                     change.consume()
 
-                                    // 轴锁定：前 15px 确定方向
-                                    if (!axisDetermined) {
-                                        val totalX = abs(horizontalOffset.value + dragAmount.x)
-                                        val totalY = abs(verticalOffset.value + dragAmount.y)
-                                        if (totalX > 15f || totalY > 15f) {
-                                            lockedAxis = if (totalX > totalY) GestureAxis.HORIZONTAL else GestureAxis.VERTICAL
-                                            axisDetermined = true
+                                    totalDragX += dragAmount.x
+                                    totalDragY += dragAmount.y
+
+                                    if (lockedAxis == null) {
+                                        val absX = abs(totalDragX)
+                                        val absY = abs(totalDragY)
+                                        if (absX > 15f || absY > 15f) {
+                                            lockedAxis = if (absX > absY) GestureAxis.HORIZONTAL else GestureAxis.VERTICAL
                                             gestureAxis = lockedAxis
                                         }
                                     }
 
-                                    scope.launch {
-                                        when (lockedAxis) {
-                                            GestureAxis.HORIZONTAL -> {
-                                                horizontalOffset.snapTo(horizontalOffset.value + dragAmount.x)
-                                            }
-                                            GestureAxis.VERTICAL -> {
-                                                verticalOffset.snapTo(verticalOffset.value + dragAmount.y)
-                                                // 上滑时缩小+淡出
-                                                val progress = abs(verticalOffset.value) / cardHeightPx
-                                                val clampedProgress = progress.coerceIn(0f, 1f)
-                                                cardScale.snapTo(1f - clampedProgress * 0.5f)
-                                                cardAlpha.snapTo(1f - clampedProgress * 0.8f)
-                                            }
-                                            null -> {
-                                                horizontalOffset.snapTo(horizontalOffset.value + dragAmount.x)
-                                                verticalOffset.snapTo(verticalOffset.value + dragAmount.y)
-                                            }
+                                    when (lockedAxis) {
+                                        GestureAxis.HORIZONTAL -> {
+                                            horizontalOffset = totalDragX
+                                            verticalOffset = 0f
+                                            cardScale = 1f
+                                            cardAlpha = 1f
                                         }
+                                        GestureAxis.VERTICAL -> {
+                                            horizontalOffset = 0f
+                                            verticalOffset = totalDragY
+                                            val safeHeight = cardHeightPx.takeIf { it > 0f } ?: 1f
+                                            val progress = (abs(verticalOffset) / safeHeight).coerceIn(0f, 1f)
+                                            cardScale = 1f - progress * 0.5f
+                                            cardAlpha = 1f - progress * 0.8f
+                                        }
+                                        null -> Unit
                                     }
                                 }
                             )
                         }
                 ) {
-                    // 渲染前一张、当前、后一张
                     listOf(-1, 0, 1).forEach { offset ->
                         val index = state.currentIndex + offset
                         val photo = state.photos.getOrNull(index)
@@ -366,12 +479,12 @@ private fun PhotoContent(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .graphicsLayer {
-                                        translationX = horizontalOffset.value + offset * (cardWidthPx + gapPx)
+                                        translationX = horizontalOffset + offset * (cardWidthPx + gapPx)
                                         if (offset == 0) {
-                                            translationY = verticalOffset.value
-                                            scaleX = cardScale.value
-                                            scaleY = cardScale.value
-                                            alpha = cardAlpha.value
+                                            translationY = verticalOffset
+                                            scaleX = cardScale
+                                            scaleY = cardScale
+                                            alpha = cardAlpha
                                         }
                                     }
                             )
@@ -379,7 +492,6 @@ private fun PhotoContent(
                     }
                 }
 
-                // 底部：进度 + 缩略图
                 BottomSection(
                     photos = state.photos,
                     currentIndex = state.currentIndex,
@@ -406,7 +518,6 @@ private fun TopBar(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 左：日期
         Text(
             text = currentPhoto?.let {
                 SimpleDateFormat("yyyy/MM/dd", Locale.getDefault())
@@ -417,7 +528,6 @@ private fun TopBar(
             modifier = Modifier.weight(1f)
         )
 
-        // 中：进度
         Text(
             text = if (totalCount > 0) "${currentIndex + 1} / $totalCount" else "",
             color = Color(0xFF1C1C1E),
@@ -427,7 +537,6 @@ private fun TopBar(
             textAlign = TextAlign.Center
         )
 
-        // 右：垃圾桶
         Box(
             modifier = Modifier.weight(1f),
             contentAlignment = Alignment.CenterEnd
@@ -481,7 +590,6 @@ private fun PhotoCard(
                 .clip(RoundedCornerShape(16.dp))
         )
 
-        // 待删除标记
         if (isMarkedForDelete) {
             Box(
                 modifier = Modifier
@@ -511,7 +619,6 @@ private fun BottomSection(
             .padding(bottom = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // 进度文字
         if (totalCount > 0) {
             Text(
                 text = "${currentIndex + 1} / $totalCount",
@@ -521,7 +628,6 @@ private fun BottomSection(
             )
         }
 
-        // 缩略图条
         ThumbnailStrip(
             photos = photos,
             currentIndex = currentIndex,
