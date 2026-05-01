@@ -15,3 +15,9 @@ val YiHuaPrimary = Color(0xFF6200EE)
 val SwipeRightColor = Color(0xFF4CAF50)   // 绿色：下一张
 val SwipeLeftColor = Color(0xFF2196F3)    // 蓝色：上一张
 val SwipeUpColor = Color(0xFFFF5252)      // 红色：加入删除队列
+
+// 新 UI 配色
+val AppleSystemGray6 = Color(0xFFF2F2F7)
+val LightGrayText = Color(0xFF8E8E93)
+val ThumbnailHighlight = Color(0xFF007AFF)
+val TrashBadgeColor = Color(0xFFFF3B30)

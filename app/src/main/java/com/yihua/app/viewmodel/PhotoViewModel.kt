@@ -1,6 +1,7 @@
 package com.yihua.app.viewmodel
 
 import android.app.Application
+import android.content.Context
 import android.content.IntentSender
 import android.os.Build
 import android.provider.MediaStore
@@ -14,79 +15,82 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-// 操作历史，用于撤销
-sealed class SwipeAction {
-    data class Skipped(val previousIndex: Int) : SwipeAction()
-    data class MarkedForDelete(val photo: Photo, val previousIndex: Int) : SwipeAction()
-}
+data class DeleteHistoryEntry(val photo: Photo, val previousIndex: Int)
 
 data class PhotoUiState(
     val photos: List<Photo> = emptyList(),
     val currentIndex: Int = 0,
     val deleteQueue: List<Photo> = emptyList(),
-    val actionHistory: List<SwipeAction> = emptyList(),
+    val deleteHistory: List<DeleteHistoryEntry> = emptyList(),
     val isLoading: Boolean = true,
     val isEmpty: Boolean = false
 ) {
     val currentPhoto: Photo? get() = photos.getOrNull(currentIndex)
-    val canUndo: Boolean get() = actionHistory.isNotEmpty()
+    val canUndoDelete: Boolean get() = deleteHistory.isNotEmpty()
     val isCurrentMarkedForDelete: Boolean
         get() = currentPhoto != null && deleteQueue.any { it.id == currentPhoto!!.id }
 }
 
 class PhotoViewModel(application: Application) : AndroidViewModel(application) {
 
+    companion object {
+        private const val PREFS_NAME = "yihua_prefs"
+        private const val KEY_CURRENT_INDEX = "current_index"
+    }
+
     private val repository = PhotoRepository(application)
+    private val prefs = application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     private val _uiState = MutableStateFlow(PhotoUiState())
     val uiState: StateFlow<PhotoUiState> = _uiState.asStateFlow()
+
+    private fun saveCurrentIndex(index: Int) {
+        prefs.edit().putInt(KEY_CURRENT_INDEX, index).apply()
+    }
 
     fun loadPhotos() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             val photos = repository.loadPhotos()
+            val savedIndex = prefs.getInt(KEY_CURRENT_INDEX, 0)
+                .coerceIn(0, maxOf(0, photos.size - 1))
             _uiState.update {
                 it.copy(
                     photos = photos,
                     isLoading = false,
                     isEmpty = photos.isEmpty(),
-                    currentIndex = 0,
+                    currentIndex = savedIndex,
                     deleteQueue = emptyList(),
-                    actionHistory = emptyList()
+                    deleteHistory = emptyList()
                 )
             }
         }
     }
 
-    /** 右滑 → 下一张 */
+    /** 下一张 */
     fun swipeRight() {
         _uiState.update { state ->
             val nextIndex = state.currentIndex + 1
             if (nextIndex >= state.photos.size) return@update state
-            state.copy(
-                currentIndex = nextIndex,
-                actionHistory = state.actionHistory + SwipeAction.Skipped(state.currentIndex)
-            )
+            state.copy(currentIndex = nextIndex)
         }
+        saveCurrentIndex(_uiState.value.currentIndex)
     }
 
-    /** 左滑 → 上一张 */
+    /** 上一张 */
     fun swipeLeft() {
         _uiState.update { state ->
             val prevIndex = state.currentIndex - 1
             if (prevIndex < 0) return@update state
-            state.copy(
-                currentIndex = prevIndex,
-                actionHistory = state.actionHistory + SwipeAction.Skipped(state.currentIndex)
-            )
+            state.copy(currentIndex = prevIndex)
         }
+        saveCurrentIndex(_uiState.value.currentIndex)
     }
 
     /** 上滑 → 加入待删除队列，并自动前进到下一张 */
     fun swipeUp() {
         _uiState.update { state ->
             val photo = state.currentPhoto ?: return@update state
-            // 已在队列中则跳过重复添加
             val newQueue = if (state.deleteQueue.any { it.id == photo.id }) {
                 state.deleteQueue
             } else {
@@ -96,31 +100,35 @@ class PhotoViewModel(application: Application) : AndroidViewModel(application) {
             state.copy(
                 currentIndex = nextIndex,
                 deleteQueue = newQueue,
-                actionHistory = state.actionHistory + SwipeAction.MarkedForDelete(photo, state.currentIndex)
+                deleteHistory = state.deleteHistory + DeleteHistoryEntry(photo, state.currentIndex)
             )
         }
+        saveCurrentIndex(_uiState.value.currentIndex)
     }
 
-    /** 撤销上一步操作 */
-    fun undo() {
+    /** 下滑撤销上一步删除，返回是否成功 */
+    fun undoDelete(): Boolean {
+        var didUndo = false
         _uiState.update { state ->
-            val last = state.actionHistory.lastOrNull() ?: return@update state
-            when (last) {
-                is SwipeAction.Skipped -> {
-                    state.copy(
-                        currentIndex = last.previousIndex,
-                        actionHistory = state.actionHistory.dropLast(1)
-                    )
-                }
-                is SwipeAction.MarkedForDelete -> {
-                    state.copy(
-                        currentIndex = last.previousIndex,
-                        deleteQueue = state.deleteQueue.filter { it.id != last.photo.id },
-                        actionHistory = state.actionHistory.dropLast(1)
-                    )
-                }
-            }
+            val last = state.deleteHistory.lastOrNull() ?: return@update state
+            didUndo = true
+            state.copy(
+                currentIndex = last.previousIndex,
+                deleteQueue = state.deleteQueue.filter { it.id != last.photo.id },
+                deleteHistory = state.deleteHistory.dropLast(1)
+            )
         }
+        if (didUndo) saveCurrentIndex(_uiState.value.currentIndex)
+        return didUndo
+    }
+
+    /** 跳转到指定索引（缩略图点击） */
+    fun goToIndex(index: Int) {
+        _uiState.update { state ->
+            val safeIndex = index.coerceIn(0, maxOf(0, state.photos.size - 1))
+            state.copy(currentIndex = safeIndex)
+        }
+        saveCurrentIndex(_uiState.value.currentIndex)
     }
 
     /** 从待删除队列中移除单张照片 */
@@ -171,9 +179,10 @@ class PhotoViewModel(application: Application) : AndroidViewModel(application) {
                 photos = updatedPhotos,
                 currentIndex = safeIndex,
                 deleteQueue = emptyList(),
-                actionHistory = emptyList(),
+                deleteHistory = emptyList(),
                 isEmpty = updatedPhotos.isEmpty()
             )
         }
+        saveCurrentIndex(_uiState.value.currentIndex)
     }
 }

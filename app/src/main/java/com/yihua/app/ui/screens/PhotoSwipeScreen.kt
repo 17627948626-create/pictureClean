@@ -2,25 +2,34 @@ package com.yihua.app.ui.screens
 
 import android.os.Build
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -31,12 +40,20 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.google.accompanist.permissions.shouldShowRationale
-import com.yihua.app.ui.theme.SwipeLeftColor
-import com.yihua.app.ui.theme.SwipeRightColor
+import com.yihua.app.data.Photo
+import com.yihua.app.ui.theme.AppleSystemGray6
+import com.yihua.app.ui.theme.LightGrayText
 import com.yihua.app.ui.theme.SwipeUpColor
+import com.yihua.app.ui.theme.ThumbnailHighlight
+import com.yihua.app.ui.theme.TrashBadgeColor
 import com.yihua.app.viewmodel.PhotoViewModel
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.math.abs
+
+private enum class GestureAxis { HORIZONTAL, VERTICAL }
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -91,7 +108,7 @@ private fun PermissionScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black),
+            .background(AppleSystemGray6),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -105,14 +122,14 @@ private fun PermissionScreen(
             Spacer(Modifier.height(24.dp))
             Text(
                 text = "一划 · 相册瘦身",
-                color = Color.White,
+                color = Color(0xFF1C1C1E),
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold
             )
             Spacer(Modifier.height(12.dp))
             Text(
                 text = message,
-                color = Color.White.copy(alpha = 0.7f),
+                color = LightGrayText,
                 fontSize = 14.sp,
                 textAlign = TextAlign.Center
             )
@@ -121,8 +138,8 @@ private fun PermissionScreen(
                 onClick = onRequest,
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.White,
-                    contentColor = Color.Black
+                    containerColor = Color(0xFF1C1C1E),
+                    contentColor = Color.White
                 )
             ) {
                 Text(buttonText, fontWeight = FontWeight.Medium)
@@ -139,166 +156,235 @@ private fun PhotoContent(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
 
-    // 手势偏移动画
-    val offsetX = remember { Animatable(0f) }
-    val offsetY = remember { Animatable(0f) }
-    var swipeDirection by remember { mutableStateOf<SwipeDirection?>(null) }
+    // 手势动画
+    val horizontalOffset = remember { Animatable(0f) }
+    val verticalOffset = remember { Animatable(0f) }
+    val cardScale = remember { Animatable(1f) }
+    val cardAlpha = remember { Animatable(1f) }
+    var gestureAxis by remember { mutableStateOf<GestureAxis?>(null) }
+    var isUndoAnimating by remember { mutableStateOf(false) }
 
-    // 当 currentIndex 变化时，重置手势偏移
+    // 卡片尺寸
+    var cardWidthPx by remember { mutableFloatStateOf(0f) }
+    var cardHeightPx by remember { mutableFloatStateOf(0f) }
+    val gapPx = with(LocalDensity.current) { 16.dp.toPx() }
+
+    // currentIndex 变化时重置动画
     LaunchedEffect(state.currentIndex) {
-        offsetX.snapTo(0f)
-        offsetY.snapTo(0f)
-        swipeDirection = null
+        if (!isUndoAnimating) {
+            horizontalOffset.snapTo(0f)
+            verticalOffset.snapTo(0f)
+            cardScale.snapTo(1f)
+            cardAlpha.snapTo(1f)
+        }
+        gestureAxis = null
     }
 
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(AppleSystemGray6)
+            .statusBarsPadding()
     ) {
         when {
             state.isLoading -> {
-                CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.Center),
-                    color = Color.White
-                )
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = LightGrayText)
+                }
             }
             state.isEmpty -> {
-                Column(
-                    modifier = Modifier.align(Alignment.Center),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text("🎉", fontSize = 64.sp)
-                    Spacer(Modifier.height(16.dp))
-                    Text(
-                        "相册已整理完毕！",
-                        color = Color.White,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("🎉", fontSize = 64.sp)
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            "相册已整理完毕！",
+                            color = Color(0xFF1C1C1E),
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
             }
             else -> {
-                val photo = state.currentPhoto
+                // 顶栏
+                TopBar(
+                    currentPhoto = state.currentPhoto,
+                    currentIndex = state.currentIndex,
+                    totalCount = state.photos.size,
+                    deleteQueueSize = state.deleteQueue.size,
+                    onTrashClick = onNavigateToConfirm
+                )
 
-                if (photo != null) {
-                    // 主图：支持手势拖动
-                    val rotation = offsetX.value / 20f
-                    val alpha = 1f - (abs(offsetX.value) + abs(offsetY.value.coerceAtMost(0f))) / 1200f
+                // 照片卡片区域
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .onSizeChanged {
+                            cardWidthPx = it.width.toFloat()
+                            cardHeightPx = it.height.toFloat()
+                        }
+                        .pointerInput(state.currentIndex) {
+                            var axisDetermined = false
+                            var lockedAxis: GestureAxis? = null
 
-                    AsyncImage(
-                        model = photo.uri,
-                        contentDescription = photo.displayName,
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer {
-                                translationX = offsetX.value
-                                translationY = offsetY.value
-                                rotationZ = rotation
-                                this.alpha = alpha.coerceIn(0f, 1f)
-                            }
-                            .pointerInput(state.currentIndex) {
-                                detectDragGestures(
-                                    onDragEnd = {
-                                        val x = offsetX.value
-                                        val y = offsetY.value
-                                        val horizontalAbs = abs(x)
-                                        val verticalAbs = abs(y)
-                                        val threshold = 120f
-
-                                        scope.launch {
-                                            when {
-                                                // 上滑优先检测
-                                                verticalAbs > horizontalAbs && y < -threshold -> {
-                                                    offsetY.animateTo(
-                                                        -size.height.toFloat(),
-                                                        animationSpec = spring(stiffness = Spring.StiffnessMedium)
-                                                    )
-                                                    viewModel.swipeUp()
-                                                }
-                                                // 右滑：上一张
-                                                horizontalAbs > verticalAbs && x > threshold -> {
-                                                    offsetX.animateTo(
-                                                        size.width.toFloat(),
-                                                        animationSpec = spring(stiffness = Spring.StiffnessMedium)
-                                                    )
-                                                    viewModel.swipeLeft()
-                                                }
-                                                // 左滑：下一张
-                                                horizontalAbs > verticalAbs && x < -threshold -> {
-                                                    offsetX.animateTo(
-                                                        -size.width.toFloat(),
-                                                        animationSpec = spring(stiffness = Spring.StiffnessMedium)
-                                                    )
-                                                    viewModel.swipeRight()
-                                                }
-                                                // 未达到阈值，弹回
-                                                else -> {
-                                                    launch { offsetX.animateTo(0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy)) }
-                                                    launch { offsetY.animateTo(0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy)) }
-                                                    swipeDirection = null
+                            detectDragGestures(
+                                onDragEnd = {
+                                    val threshold = 100f
+                                    scope.launch {
+                                        when (lockedAxis) {
+                                            GestureAxis.HORIZONTAL -> {
+                                                val x = horizontalOffset.value
+                                                when {
+                                                    // 右划：上一张
+                                                    x > threshold && state.currentIndex > 0 -> {
+                                                        horizontalOffset.animateTo(
+                                                            cardWidthPx + gapPx,
+                                                            tween(300, easing = FastOutSlowInEasing)
+                                                        )
+                                                        viewModel.swipeLeft()
+                                                    }
+                                                    // 左划：下一张
+                                                    x < -threshold && state.currentIndex < state.photos.size - 1 -> {
+                                                        horizontalOffset.animateTo(
+                                                            -(cardWidthPx + gapPx),
+                                                            tween(300, easing = FastOutSlowInEasing)
+                                                        )
+                                                        viewModel.swipeRight()
+                                                    }
+                                                    else -> {
+                                                        horizontalOffset.animateTo(
+                                                            0f,
+                                                            spring(dampingRatio = Spring.DampingRatioLowBouncy)
+                                                        )
+                                                    }
                                                 }
                                             }
-                                        }
-                                    },
-                                    onDragCancel = {
-                                        scope.launch {
-                                            launch { offsetX.animateTo(0f, spring()) }
-                                            launch { offsetY.animateTo(0f, spring()) }
-                                            swipeDirection = null
-                                        }
-                                    },
-                                    onDrag = { change, dragAmount ->
-                                        change.consume()
-                                        scope.launch {
-                                            offsetX.snapTo(offsetX.value + dragAmount.x)
-                                            offsetY.snapTo(offsetY.value + dragAmount.y)
-                                        }
-                                        val x = offsetX.value
-                                        val y = offsetY.value
-                                        swipeDirection = when {
-                                            abs(y) > abs(x) && y < -40f -> SwipeDirection.UP
-                                            abs(x) > abs(y) && x > 40f -> SwipeDirection.RIGHT
-                                            abs(x) > abs(y) && x < -40f -> SwipeDirection.LEFT
-                                            else -> null
+                                            GestureAxis.VERTICAL -> {
+                                                val y = verticalOffset.value
+                                                when {
+                                                    // 上滑：标记删除
+                                                    y < -threshold -> {
+                                                        launch { verticalOffset.animateTo(-cardHeightPx, tween(350, easing = FastOutSlowInEasing)) }
+                                                        launch { cardScale.animateTo(0.5f, tween(350, easing = FastOutSlowInEasing)) }
+                                                        launch { cardAlpha.animateTo(0f, tween(350, easing = FastOutSlowInEasing)) }
+                                                        viewModel.swipeUp()
+                                                    }
+                                                    // 下滑：撤销删除
+                                                    y > threshold -> {
+                                                        val didUndo = viewModel.undoDelete()
+                                                        if (didUndo) {
+                                                            isUndoAnimating = true
+                                                            // 先设置到飞走状态
+                                                            verticalOffset.snapTo(-cardHeightPx)
+                                                            cardScale.snapTo(0.5f)
+                                                            cardAlpha.snapTo(0f)
+                                                            // 反向飞回
+                                                            launch { verticalOffset.animateTo(0f, tween(350, easing = FastOutSlowInEasing)) }
+                                                            launch { cardScale.animateTo(1f, tween(350, easing = FastOutSlowInEasing)) }
+                                                            launch { cardAlpha.animateTo(1f, tween(350, easing = FastOutSlowInEasing)) }
+                                                            isUndoAnimating = false
+                                                        } else {
+                                                            verticalOffset.animateTo(
+                                                                0f,
+                                                                spring(dampingRatio = Spring.DampingRatioLowBouncy)
+                                                            )
+                                                        }
+                                                    }
+                                                    else -> {
+                                                        launch { verticalOffset.animateTo(0f, spring(dampingRatio = Spring.DampingRatioLowBouncy)) }
+                                                        launch { cardScale.animateTo(1f, spring()) }
+                                                        launch { cardAlpha.animateTo(1f, spring()) }
+                                                    }
+                                                }
+                                            }
+                                            null -> {}
                                         }
                                     }
-                                )
-                            }
-                    )
+                                    axisDetermined = false
+                                    lockedAxis = null
+                                    gestureAxis = null
+                                },
+                                onDragCancel = {
+                                    scope.launch {
+                                        launch { horizontalOffset.animateTo(0f, spring()) }
+                                        launch { verticalOffset.animateTo(0f, spring()) }
+                                        launch { cardScale.animateTo(1f, spring()) }
+                                        launch { cardAlpha.animateTo(1f, spring()) }
+                                    }
+                                    axisDetermined = false
+                                    lockedAxis = null
+                                    gestureAxis = null
+                                },
+                                onDrag = { change, dragAmount ->
+                                    change.consume()
 
-                    // 滑动提示标签
-                    swipeDirection?.let { dir ->
-                        SwipeHintLabel(
-                            direction = dir,
-                            modifier = Modifier.align(Alignment.Center)
-                        )
-                    }
+                                    // 轴锁定：前 15px 确定方向
+                                    if (!axisDetermined) {
+                                        val totalX = abs(horizontalOffset.value + dragAmount.x)
+                                        val totalY = abs(verticalOffset.value + dragAmount.y)
+                                        if (totalX > 15f || totalY > 15f) {
+                                            lockedAxis = if (totalX > totalY) GestureAxis.HORIZONTAL else GestureAxis.VERTICAL
+                                            axisDetermined = true
+                                            gestureAxis = lockedAxis
+                                        }
+                                    }
 
-                    // 当前照片已在队列中的标记
-                    if (state.isCurrentMarkedForDelete) {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopStart)
-                                .padding(16.dp)
-                                .background(SwipeUpColor, RoundedCornerShape(8.dp))
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Text("待删除", color = Color.White, fontSize = 13.sp)
+                                    scope.launch {
+                                        when (lockedAxis) {
+                                            GestureAxis.HORIZONTAL -> {
+                                                horizontalOffset.snapTo(horizontalOffset.value + dragAmount.x)
+                                            }
+                                            GestureAxis.VERTICAL -> {
+                                                verticalOffset.snapTo(verticalOffset.value + dragAmount.y)
+                                                // 上滑时缩小+淡出
+                                                val progress = abs(verticalOffset.value) / cardHeightPx
+                                                val clampedProgress = progress.coerceIn(0f, 1f)
+                                                cardScale.snapTo(1f - clampedProgress * 0.5f)
+                                                cardAlpha.snapTo(1f - clampedProgress * 0.8f)
+                                            }
+                                            null -> {
+                                                horizontalOffset.snapTo(horizontalOffset.value + dragAmount.x)
+                                                verticalOffset.snapTo(verticalOffset.value + dragAmount.y)
+                                            }
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                ) {
+                    // 渲染前一张、当前、后一张
+                    listOf(-1, 0, 1).forEach { offset ->
+                        val index = state.currentIndex + offset
+                        val photo = state.photos.getOrNull(index)
+                        if (photo != null) {
+                            PhotoCard(
+                                photo = photo,
+                                isMarkedForDelete = state.deleteQueue.any { it.id == photo.id },
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .graphicsLayer {
+                                        translationX = horizontalOffset.value + offset * (cardWidthPx + gapPx)
+                                        if (offset == 0) {
+                                            translationY = verticalOffset.value
+                                            scaleX = cardScale.value
+                                            scaleY = cardScale.value
+                                            alpha = cardAlpha.value
+                                        }
+                                    }
+                            )
                         }
                     }
                 }
 
-                // 底部工具栏
-                BottomBar(
+                // 底部：进度 + 缩略图
+                BottomSection(
+                    photos = state.photos,
                     currentIndex = state.currentIndex,
                     totalCount = state.photos.size,
-                    deleteQueueSize = state.deleteQueue.size,
-                    canUndo = state.canUndo,
-                    onUndo = { viewModel.undo() },
-                    onDeleteConfirm = onNavigateToConfirm,
-                    modifier = Modifier.align(Alignment.BottomCenter)
+                    onThumbnailClick = { viewModel.goToIndex(it) }
                 )
             }
         }
@@ -306,121 +392,182 @@ private fun PhotoContent(
 }
 
 @Composable
-private fun SwipeHintLabel(direction: SwipeDirection, modifier: Modifier = Modifier) {
-    val (text, color) = when (direction) {
-        SwipeDirection.RIGHT -> "上一张 →" to SwipeRightColor
-        SwipeDirection.LEFT -> "← 下一张" to SwipeLeftColor
-        SwipeDirection.UP -> "↑ 加入待删除" to SwipeUpColor
-    }
-    Box(
+private fun TopBar(
+    currentPhoto: Photo?,
+    currentIndex: Int,
+    totalCount: Int,
+    deleteQueueSize: Int,
+    onTrashClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
         modifier = modifier
-            .background(color.copy(alpha = 0.85f), RoundedCornerShape(12.dp))
-            .padding(horizontal = 20.dp, vertical = 10.dp)
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
+        // 左：日期
         Text(
-            text = text,
-            color = Color.White,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold
+            text = currentPhoto?.let {
+                SimpleDateFormat("yyyy/MM/dd", Locale.getDefault())
+                    .format(Date(it.dateAdded * 1000))
+            } ?: "",
+            color = LightGrayText,
+            fontSize = 13.sp,
+            modifier = Modifier.weight(1f)
         )
+
+        // 中：进度
+        Text(
+            text = if (totalCount > 0) "${currentIndex + 1} / $totalCount" else "",
+            color = Color(0xFF1C1C1E),
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.weight(1f),
+            textAlign = TextAlign.Center
+        )
+
+        // 右：垃圾桶
+        Box(
+            modifier = Modifier.weight(1f),
+            contentAlignment = Alignment.CenterEnd
+        ) {
+            IconButton(onClick = onTrashClick) {
+                Icon(
+                    Icons.Default.Delete,
+                    contentDescription = "待删除列表",
+                    tint = if (deleteQueueSize > 0) TrashBadgeColor else LightGrayText
+                )
+            }
+            if (deleteQueueSize > 0) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = (-4).dp, y = 4.dp)
+                        .size(18.dp)
+                        .background(TrashBadgeColor, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (deleteQueueSize > 99) "99+" else "$deleteQueueSize",
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
     }
 }
 
 @Composable
-private fun BottomBar(
+private fun PhotoCard(
+    photo: Photo,
+    isMarkedForDelete: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .shadow(4.dp, RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.White)
+    ) {
+        AsyncImage(
+            model = photo.uri,
+            contentDescription = photo.displayName,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(16.dp))
+        )
+
+        // 待删除标记
+        if (isMarkedForDelete) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(12.dp)
+                    .background(SwipeUpColor.copy(alpha = 0.9f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 10.dp, vertical = 4.dp)
+            ) {
+                Text("待删除", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+            }
+        }
+    }
+}
+
+@Composable
+private fun BottomSection(
+    photos: List<Photo>,
     currentIndex: Int,
     totalCount: Int,
-    deleteQueueSize: Int,
-    canUndo: Boolean,
-    onUndo: () -> Unit,
-    onDeleteConfirm: () -> Unit,
+    onThumbnailClick: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(Color.Black.copy(alpha = 0.75f))
             .navigationBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(bottom = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // 进度条
+        // 进度文字
         if (totalCount > 0) {
-            LinearProgressIndicator(
-                progress = { (currentIndex + 1).toFloat() / totalCount },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(3.dp)
-                    .clip(RoundedCornerShape(2.dp)),
-                color = Color.White,
-                trackColor = Color.White.copy(alpha = 0.2f)
-            )
-            Spacer(Modifier.height(8.dp))
             Text(
                 text = "${currentIndex + 1} / $totalCount",
-                color = Color.White.copy(alpha = 0.8f),
-                fontSize = 13.sp
+                color = LightGrayText,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(bottom = 6.dp)
             )
         }
 
-        Spacer(Modifier.height(8.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // 撤销按钮
-            IconButton(
-                onClick = onUndo,
-                enabled = canUndo,
-                modifier = Modifier
-                    .size(44.dp)
-                    .background(
-                        if (canUndo) Color.White.copy(alpha = 0.15f) else Color.Transparent,
-                        CircleShape
-                    )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Undo,
-                    contentDescription = "撤销",
-                    tint = if (canUndo) Color.White else Color.White.copy(alpha = 0.3f)
-                )
-            }
-
-            // 操作提示
-            Text(
-                text = buildString {
-                    append("↑ 标删  ")
-                    append("← →  切换")
-                },
-                color = Color.White.copy(alpha = 0.4f),
-                fontSize = 11.sp
-            )
-
-            // 待删除队列按钮
-            if (deleteQueueSize > 0) {
-                Button(
-                    onClick = onDeleteConfirm,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = SwipeUpColor,
-                        contentColor = Color.White
-                    ),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Delete,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text("待删除 $deleteQueueSize 张", fontSize = 13.sp)
-                }
-            } else {
-                Spacer(Modifier.width(44.dp))
-            }
-        }
+        // 缩略图条
+        ThumbnailStrip(
+            photos = photos,
+            currentIndex = currentIndex,
+            onThumbnailClick = onThumbnailClick
+        )
     }
 }
 
-enum class SwipeDirection { LEFT, RIGHT, UP }
+@Composable
+private fun ThumbnailStrip(
+    photos: List<Photo>,
+    currentIndex: Int,
+    onThumbnailClick: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(currentIndex) {
+        val targetIndex = maxOf(0, currentIndex - 3)
+        listState.animateScrollToItem(targetIndex)
+    }
+
+    LazyRow(
+        state = listState,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(50.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        contentPadding = PaddingValues(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        itemsIndexed(photos) { index, photo ->
+            val isSelected = index == currentIndex
+            AsyncImage(
+                model = photo.uri,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(if (isSelected) 46.dp else 38.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .then(
+                        if (isSelected) Modifier.border(2.dp, ThumbnailHighlight, RoundedCornerShape(4.dp))
+                        else Modifier
+                    )
+                    .clickable { onThumbnailClick(index) }
+            )
+        }
+    }
+}
