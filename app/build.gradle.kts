@@ -20,15 +20,20 @@ android {
         }
     }
 
-    // 从环境变量读取签名配置，CI 有 secrets 时生效，本地无环境变量时跳过
+    // 从环境变量读取签名配置，CI 有 secrets 时生效，本地无环境变量时跳过。
+    // 当前 CI 生成的是 PKCS12 keystore；PKCS12 不支持 keyPassword 与 storePassword 不同，
+    // 因此 release 签名统一使用 storePassword 读取 key，避免 packageRelease 解密失败。
     val keystorePath = System.getenv("SIGNING_KEYSTORE_PATH")
-    if (keystorePath != null) {
+    val keystorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+    val keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+
+    if (!keystorePath.isNullOrBlank() && !keystorePassword.isNullOrBlank() && !keyAlias.isNullOrBlank()) {
         signingConfigs {
             create("release") {
                 storeFile = file(keystorePath)
-                storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("ANDROID_KEY_ALIAS")
-                keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+                storePassword = keystorePassword
+                keyAlias = keyAlias
+                keyPassword = keystorePassword
             }
         }
     }
