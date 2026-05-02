@@ -1,9 +1,8 @@
 package com.yihua.app.ui.screens
 
 import android.os.Build
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -303,20 +302,12 @@ private fun ColumnScope.SwipeStage(
     var dragX by remember { mutableFloatStateOf(0f) }
     var dragY by remember { mutableFloatStateOf(0f) }
     var handledGesture by remember { mutableStateOf(false) }
+    var cardEntered by remember(state.currentPhoto?.id) { mutableStateOf(false) }
 
-    val motionSpec = spring<Float>(
-        dampingRatio = Spring.DampingRatioNoBouncy,
-        stiffness = Spring.StiffnessMediumLow
-    )
-    val animatedDragX by animateFloatAsState(
-        targetValue = dragX,
-        animationSpec = motionSpec,
-        label = "photo-drag-x"
-    )
-    val animatedDragY by animateFloatAsState(
-        targetValue = dragY,
-        animationSpec = motionSpec,
-        label = "photo-drag-y"
+    val entryProgress by animateFloatAsState(
+        targetValue = if (cardEntered) 1f else 0f,
+        animationSpec = tween(durationMillis = 120),
+        label = "photo-entry"
     )
 
     fun resetDrag() {
@@ -327,6 +318,7 @@ private fun ColumnScope.SwipeStage(
 
     LaunchedEffect(state.currentPhoto?.id) {
         resetDrag()
+        cardEntered = true
     }
 
     Box(
@@ -357,8 +349,7 @@ private fun ColumnScope.SwipeStage(
                         val absY = abs(totalY)
                         val trigger = 72f
 
-                        // 关键修复：一旦上滑超过阈值，立即更新业务状态。
-                        // 不等待动画、不等待手指抬起，避免 pointerInput 取消/动画中断导致没入队。
+                        // 上滑超过阈值后立即更新业务状态；动画只负责视觉反馈。
                         if (totalY < -trigger && absY > absX * 1.15f) {
                             handledGesture = true
                             onSwipeUp()
@@ -390,12 +381,18 @@ private fun ColumnScope.SwipeStage(
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
-                        translationX = animatedDragX.coerceIn(-160f, 160f)
-                        translationY = animatedDragY.coerceIn(-220f, 120f)
-                        val progress = (-animatedDragY / 360f).coerceIn(0f, 1f)
-                        scaleX = 1f - progress * 0.18f
-                        scaleY = 1f - progress * 0.18f
-                        alpha = 1f - progress * 0.35f
+                        val clampedX = dragX.coerceIn(-180f, 180f)
+                        val clampedY = dragY.coerceIn(-240f, 140f)
+                        val deleteProgress = (-clampedY / 220f).coerceIn(0f, 1f)
+                        val enterScale = 0.98f + entryProgress * 0.02f
+                        val dragScale = 1f - deleteProgress * 0.16f
+
+                        translationX = clampedX
+                        translationY = clampedY + (1f - entryProgress) * 16f
+                        rotationZ = (clampedX / 42f).coerceIn(-5f, 5f)
+                        scaleX = enterScale * dragScale
+                        scaleY = enterScale * dragScale
+                        alpha = (0.78f + entryProgress * 0.22f) * (1f - deleteProgress * 0.32f)
                     }
             )
         }
