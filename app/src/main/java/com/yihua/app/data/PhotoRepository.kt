@@ -1,5 +1,6 @@
 package com.yihua.app.data
 
+import android.content.ContentUris
 import android.content.Context
 import android.provider.MediaStore
 import kotlinx.coroutines.Dispatchers
@@ -38,7 +39,7 @@ class PhotoRepository(private val context: Context) : PhotoDataSource {
                 val name = cursor.getString(nameColumn) ?: "未知"
                 val date = cursor.getLong(dateColumn)
                 val size = cursor.getLong(sizeColumn)
-                val uri = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL, id)
+                val uri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
                 photos.add(Photo(id, uri, name, date, size))
             }
         }
