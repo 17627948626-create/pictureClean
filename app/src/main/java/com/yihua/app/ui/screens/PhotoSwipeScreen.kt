@@ -176,6 +176,10 @@ private fun PhotoContent(
     var verticalOffset by remember { mutableFloatStateOf(0f) }
     var cardScale by remember { mutableFloatStateOf(1f) }
     var cardAlpha by remember { mutableFloatStateOf(1f) }
+    // 上滑联动：下一张从右滑入的进度 0→1
+    var swipeUpProgress by remember { mutableFloatStateOf(0f) }
+    // 下滑联动：当前张向右让位的进度 0→1
+    var swipeDownProgress by remember { mutableFloatStateOf(0f) }
     var gestureAxis by remember { mutableStateOf<GestureAxis?>(null) }
     var isUndoAnimating by remember { mutableStateOf(false) }
 
@@ -188,6 +192,8 @@ private fun PhotoContent(
         verticalOffset = 0f
         cardScale = 1f
         cardAlpha = 1f
+        swipeUpProgress = 0f
+        swipeDownProgress = 0f
     }
 
     LaunchedEffect(state.currentIndex) {
@@ -292,30 +298,21 @@ private fun PhotoContent(
                                                 val y = verticalOffset
                                                 when {
                                                     y < -threshold -> {
+                                                        val spec = tween<Float>(300, easing = FastOutSlowInEasing)
                                                         val yJob = launch {
-                                                            animateFloat(
-                                                                initialValue = verticalOffset,
-                                                                targetValue = -cardHeightPx,
-                                                                animationSpec = tween(300, easing = FastOutSlowInEasing)
-                                                            ) { verticalOffset = it }
+                                                            animateFloat(verticalOffset, -cardHeightPx, spec) { verticalOffset = it }
                                                         }
                                                         val scaleJob = launch {
-                                                            animateFloat(
-                                                                initialValue = cardScale,
-                                                                targetValue = 0.5f,
-                                                                animationSpec = tween(300, easing = FastOutSlowInEasing)
-                                                            ) { cardScale = it }
+                                                            animateFloat(cardScale, 0.5f, spec) { cardScale = it }
                                                         }
                                                         val alphaJob = launch {
-                                                            animateFloat(
-                                                                initialValue = cardAlpha,
-                                                                targetValue = 0f,
-                                                                animationSpec = tween(300, easing = FastOutSlowInEasing)
-                                                            ) { cardAlpha = it }
+                                                            animateFloat(cardAlpha, 0f, spec) { cardAlpha = it }
                                                         }
-                                                        yJob.join()
-                                                        scaleJob.join()
-                                                        alphaJob.join()
+                                                        // 下一张同步从右侧滑入
+                                                        val upProgressJob = launch {
+                                                            animateFloat(0f, 1f, spec) { swipeUpProgress = it }
+                                                        }
+                                                        yJob.join(); scaleJob.join(); alphaJob.join(); upProgressJob.join()
                                                         viewModel.swipeUp()
                                                         resetCardTransform()
                                                     }
@@ -323,34 +320,27 @@ private fun PhotoContent(
                                                         isUndoAnimating = true
                                                         val didUndo = viewModel.undoDelete()
                                                         if (didUndo) {
+                                                            // 恢复的照片从上方飞入初始状态
                                                             verticalOffset = -cardHeightPx
                                                             cardScale = 0.5f
                                                             cardAlpha = 0f
+                                                            swipeDownProgress = 0f
 
+                                                            val spec = tween<Float>(300, easing = FastOutSlowInEasing)
                                                             val yJob = launch {
-                                                                animateFloat(
-                                                                    initialValue = verticalOffset,
-                                                                    targetValue = 0f,
-                                                                    animationSpec = tween(300, easing = FastOutSlowInEasing)
-                                                                ) { verticalOffset = it }
+                                                                animateFloat(-cardHeightPx, 0f, spec) { verticalOffset = it }
                                                             }
                                                             val scaleJob = launch {
-                                                                animateFloat(
-                                                                    initialValue = cardScale,
-                                                                    targetValue = 1f,
-                                                                    animationSpec = tween(300, easing = FastOutSlowInEasing)
-                                                                ) { cardScale = it }
+                                                                animateFloat(0.5f, 1f, spec) { cardScale = it }
                                                             }
                                                             val alphaJob = launch {
-                                                                animateFloat(
-                                                                    initialValue = cardAlpha,
-                                                                    targetValue = 1f,
-                                                                    animationSpec = tween(300, easing = FastOutSlowInEasing)
-                                                                ) { cardAlpha = it }
+                                                                animateFloat(0f, 1f, spec) { cardAlpha = it }
                                                             }
-                                                            yJob.join()
-                                                            scaleJob.join()
-                                                            alphaJob.join()
+                                                            // 之前那张同步向右让位
+                                                            val downProgressJob = launch {
+                                                                animateFloat(0f, 1f, spec) { swipeDownProgress = it }
+                                                            }
+                                                            yJob.join(); scaleJob.join(); alphaJob.join(); downProgressJob.join()
                                                         } else {
                                                             animateFloat(
                                                                 initialValue = verticalOffset,
@@ -477,7 +467,17 @@ private fun PhotoContent(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .graphicsLayer {
-                                        translationX = horizontalOffset + offset * (cardWidthPx + gapPx)
+                                        val step = cardWidthPx + gapPx
+                                        translationX = when {
+                                            // 上滑：下一张从右侧滑入中间
+                                            offset == 1 && swipeUpProgress > 0f ->
+                                                step * (1f - swipeUpProgress)
+                                            // 下滑撤销：之前那张从中间让位到右侧
+                                            offset == 1 && isUndoAnimating ->
+                                                step * swipeDownProgress
+                                            else ->
+                                                horizontalOffset + offset * step
+                                        }
                                         if (offset == 0) {
                                             translationY = verticalOffset
                                             scaleX = cardScale
