@@ -43,6 +43,7 @@ fun DeleteConfirmScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var showConfirmDialog by remember { mutableStateOf(false) }
+    var showDeleteError by remember { mutableStateOf(false) }
 
     // 系统删除结果回调
     val deleteLauncher = rememberLauncherForActivityResult(
@@ -108,6 +109,18 @@ fun DeleteConfirmScreen(
         }
     }
 
+    // Android 10 删除失败提示
+    if (showDeleteError) {
+        AlertDialog(
+            onDismissRequest = { showDeleteError = false },
+            title = { Text("删除失败", fontWeight = FontWeight.Bold) },
+            text = { Text("照片删除失败，请检查存储权限后重试。待删除队列已保留。") },
+            confirmButton = {
+                TextButton(onClick = { showDeleteError = false }) { Text("确定") }
+            }
+        )
+    }
+
     // 二次确认弹窗
     if (showConfirmDialog) {
         AlertDialog(
@@ -142,9 +155,12 @@ fun DeleteConfirmScreen(
                                 )
                             }
                         } else {
-                            // Android 10：直接删除
-                            viewModel.deleteDirectly()
-                            onNavigateBack()
+                            // Android 10：直接删除，失败时保留队列并提示
+                            if (viewModel.deleteDirectly()) {
+                                onNavigateBack()
+                            } else {
+                                showDeleteError = true
+                            }
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = SwipeUpColor)
