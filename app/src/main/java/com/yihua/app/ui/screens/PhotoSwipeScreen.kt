@@ -453,7 +453,8 @@ private fun ColumnScope.SwipeStage(
                             }
                             GestureAxis.Vertical -> {
                                 dragX = 0f
-                                dragY = totalY
+                                // 下滑只用于触发恢复，不允许当前照片被拉下去；上滑才驱动删除视觉反馈。
+                                dragY = totalY.coerceAtMost(0f)
 
                                 val absX = abs(totalX)
                                 val absY = abs(totalY)
@@ -534,7 +535,7 @@ private fun ColumnScope.SwipeStage(
                             val pageStep = stageWidth.takeIf { it > 0f } ?: size.width
                             val baseX = offset * pageStep + pageOffset
                             val isCurrent = offset == 0
-                            val clampedY = dragY.coerceIn(-240f, 140f)
+                            val clampedY = dragY.coerceIn(-240f, 0f)
                             val deleteProgress = if (isCurrent) (-clampedY / 220f).coerceIn(0f, 1f) else 0f
                             val enterScale = if (isCurrent) 0.98f + entryProgress * 0.02f else 1f
                             val dragScale = if (isCurrent) 1f - deleteProgress * 0.16f else 1f
