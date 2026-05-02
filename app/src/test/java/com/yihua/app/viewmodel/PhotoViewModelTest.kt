@@ -18,6 +18,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 // ─── 测试辅助 ──────────────────────────────────────────────────────────────────
 
@@ -29,6 +30,7 @@ private class FakePhotoDataSource(private val photos: List<Photo>) : PhotoDataSo
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34]) // compileSdk=35 超出 Robolectric 4.12 自动选择范围，显式固定到 34
 class PhotoViewModelTest {
 
     private val testDispatcher = UnconfinedTestDispatcher()
