@@ -77,6 +77,8 @@ android {
         unitTests {
             // 让 Android SDK 方法在 JVM 测试中返回默认值而非抛异常
             isReturnDefaultValues = true
+            // Robolectric 需要访问 Android 资源
+            isIncludeAndroidResources = true
         }
     }
 
@@ -128,4 +130,7 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     testImplementation("io.mockk:mockk:1.13.12")
+    testImplementation("org.robolectric:robolectric:4.12.2")
+    testImplementation("androidx.test:core:1.6.1")
+    testImplementation("androidx.test:core-ktx:1.6.1")
 }

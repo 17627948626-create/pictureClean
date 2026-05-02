@@ -44,6 +44,8 @@ fun DeleteConfirmScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var showConfirmDialog by remember { mutableStateOf(false) }
     var showDeleteError by remember { mutableStateOf(false) }
+    var showCancelledInfo by remember { mutableStateOf(false) }
+    var showRequestError by remember { mutableStateOf(false) }
 
     // 系统删除结果回调
     val deleteLauncher = rememberLauncherForActivityResult(
@@ -52,6 +54,8 @@ fun DeleteConfirmScreen(
         if (result.resultCode == Activity.RESULT_OK) {
             viewModel.onDeleteCompleted()
             onNavigateBack()
+        } else {
+            showCancelledInfo = true
         }
     }
 
@@ -121,6 +125,30 @@ fun DeleteConfirmScreen(
         )
     }
 
+    // Android 11+ 用户取消系统删除弹窗提示
+    if (showCancelledInfo) {
+        AlertDialog(
+            onDismissRequest = { showCancelledInfo = false },
+            title = { Text("已取消删除", fontWeight = FontWeight.Bold) },
+            text = { Text("照片未被删除，待删除队列已保留。") },
+            confirmButton = {
+                TextButton(onClick = { showCancelledInfo = false }) { Text("知道了") }
+            }
+        )
+    }
+
+    // Android 11+ 无法发起系统删除请求提示
+    if (showRequestError) {
+        AlertDialog(
+            onDismissRequest = { showRequestError = false },
+            title = { Text("无法发起删除请求", fontWeight = FontWeight.Bold) },
+            text = { Text("无法发起系统删除请求，请重试。待删除队列已保留。") },
+            confirmButton = {
+                TextButton(onClick = { showRequestError = false }) { Text("知道了") }
+            }
+        )
+    }
+
     // 二次确认弹窗
     if (showConfirmDialog) {
         AlertDialog(
@@ -153,6 +181,8 @@ fun DeleteConfirmScreen(
                                 deleteLauncher.launch(
                                     IntentSenderRequest.Builder(intentSender).build()
                                 )
+                            } else {
+                                showRequestError = true
                             }
                         } else {
                             // Android 10：直接删除，失败时保留队列并提示

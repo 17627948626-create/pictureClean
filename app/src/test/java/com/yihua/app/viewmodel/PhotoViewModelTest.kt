@@ -1,12 +1,12 @@
 package com.yihua.app.viewmodel
 
 import android.app.Application
-import android.content.SharedPreferences
+import android.content.Context
 import android.net.Uri
-import io.mockk.every
-import io.mockk.mockk
+import androidx.test.core.app.ApplicationProvider
 import com.yihua.app.data.Photo
 import com.yihua.app.data.PhotoDataSource
+import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -16,6 +16,8 @@ import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 
 // ─── 测试辅助 ──────────────────────────────────────────────────────────────────
 
@@ -26,13 +28,22 @@ private class FakePhotoDataSource(private val photos: List<Photo>) : PhotoDataSo
 // ─── 测试 ─────────────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalCoroutinesApi::class)
+@RunWith(RobolectricTestRunner::class)
 class PhotoViewModelTest {
 
     private val testDispatcher = UnconfinedTestDispatcher()
+    private lateinit var app: Application
+
+    companion object {
+        private const val PREFS_NAME = "test_prefs"
+    }
 
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
+        app = ApplicationProvider.getApplicationContext()
+        // 每次测试前清空 SharedPreferences，确保状态隔离
+        app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().clear().commit()
     }
 
     @After
@@ -47,23 +58,8 @@ class PhotoViewModelTest {
     }
 
     private fun makeViewModel(photos: List<Photo> = emptyList()): PhotoViewModel {
-        val mockPrefs = mockk<SharedPreferences>(relaxed = true)
-        val mockEditor = mockk<SharedPreferences.Editor>(relaxed = true)
-        every { mockPrefs.edit() } returns mockEditor
-        every { mockEditor.putInt(any(), any()) } returns mockEditor
-        every { mockPrefs.getInt(any(), any()) } returns 0
-
-        val mockApp = mockk<Application>(relaxed = true)
-        every { mockApp.getSharedPreferences(any(), any()) } returns mockPrefs
-
-        return PhotoViewModel(mockApp, FakePhotoDataSource(photos), mockPrefs)
-    }
-
-    private fun PhotoViewModel.load(photos: List<Photo>): PhotoViewModel {
-        // loadPhotos() 已在 makeViewModel 里通过 FakePhotoDataSource 提供数据；
-        // 调用后 UnconfinedTestDispatcher 确保状态立刻更新。
-        loadPhotos()
-        return this
+        val prefs = app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return PhotoViewModel(app, FakePhotoDataSource(photos), prefs)
     }
 
     // ── 1. 加载后 currentPhoto 正确 ───────────────────────────────────────────
@@ -237,5 +233,53 @@ class PhotoViewModelTest {
         // 假设用户取消了系统删除弹窗，不调用 onDeleteCompleted()
         assertEquals(2, vm.uiState.value.deleteQueue.size)
         assertEquals(2, vm.uiState.value.deleteHistory.size)
+    }
+
+    // ── 13. 多次确认删除后 allPhotos 持续缩减 ────────────────────────────────
+
+    @Test
+    fun `multiple onDeleteCompleted calls each reduce allPhotos correctly`() {
+        val photos = makePhotos(4)
+        val vm = makeViewModel(photos)
+        vm.loadPhotos()
+
+        vm.swipeUp() // queue photos[0]
+        vm.onDeleteCompleted()
+        assertEquals(3, vm.uiState.value.allPhotos.size)
+
+        vm.swipeUp() // queue photos[1]
+        vm.onDeleteCompleted()
+        assertEquals(2, vm.uiState.value.allPhotos.size)
+    }
+
+    // ── 14. 删除全部后 onDeleteCompleted → EmptyLibrary ───────────────────────
+
+    @Test
+    fun `onDeleteCompleted all photos transitions to EmptyLibrary`() {
+        val photos = makePhotos(2)
+        val vm = makeViewModel(photos)
+        vm.loadPhotos()
+        vm.swipeUp()
+        vm.swipeUp()
+        vm.onDeleteCompleted()
+        assertEquals(PhotoListState.EmptyLibrary, vm.uiState.value.screenState)
+        assertTrue(vm.uiState.value.allPhotos.isEmpty())
+    }
+
+    // ── 15. removeFromDeleteQueue 恢复后 screenState 回到 Reviewable ──────────
+
+    @Test
+    fun `removeFromDeleteQueue when all queued restores screenState to Reviewable`() {
+        val photos = makePhotos(2)
+        val vm = makeViewModel(photos)
+        vm.loadPhotos()
+        vm.swipeUp()
+        vm.swipeUp()
+        assertEquals(PhotoListState.AllQueuedForDelete, vm.uiState.value.screenState)
+
+        val photo = vm.uiState.value.deleteQueue.first()
+        vm.removeFromDeleteQueue(photo)
+        assertEquals(PhotoListState.Reviewable, vm.uiState.value.screenState)
+        assertEquals(1, vm.uiState.value.visiblePhotos.size)
     }
 }
