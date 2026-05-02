@@ -3,11 +3,13 @@ package com.yihua.app.viewmodel
 import android.app.Application
 import android.content.Context
 import android.content.IntentSender
+import android.content.SharedPreferences
 import android.os.Build
 import android.provider.MediaStore
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.yihua.app.data.Photo
+import com.yihua.app.data.PhotoDataSource
 import com.yihua.app.data.PhotoRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -84,15 +86,23 @@ private fun PhotoUiState.withRecomputedVisible(): PhotoUiState {
 
 // ─── ViewModel ────────────────────────────────────────────────────────────────
 
-class PhotoViewModel(application: Application) : AndroidViewModel(application) {
+class PhotoViewModel(
+    application: Application,
+    private val repository: PhotoDataSource,
+    private val prefs: SharedPreferences
+) : AndroidViewModel(application) {
+
+    /** 生产构造器：ViewModelProvider 调用此路径 */
+    constructor(application: Application) : this(
+        application = application,
+        repository  = PhotoRepository(application),
+        prefs       = application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    )
 
     companion object {
-        private const val PREFS_NAME       = "yihua_prefs"
+        private const val PREFS_NAME        = "yihua_prefs"
         private const val KEY_CURRENT_INDEX = "current_index"
     }
-
-    private val repository = PhotoRepository(application)
-    private val prefs = application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     private val _uiState = MutableStateFlow(PhotoUiState())
     val uiState: StateFlow<PhotoUiState> = _uiState.asStateFlow()

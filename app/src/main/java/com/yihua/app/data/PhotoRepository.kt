@@ -5,9 +5,9 @@ import android.provider.MediaStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-class PhotoRepository(private val context: Context) {
+class PhotoRepository(private val context: Context) : PhotoDataSource {
 
-    suspend fun loadPhotos(): List<Photo> = withContext(Dispatchers.IO) {
+    override suspend fun loadPhotos(): List<Photo> = withContext(Dispatchers.IO) {
         val photos = mutableListOf<Photo>()
 
         val collection = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)

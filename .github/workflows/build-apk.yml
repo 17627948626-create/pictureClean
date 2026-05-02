@@ -44,6 +44,17 @@ jobs:
             echo "available=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # ── 质量门禁（测试失败则后续步骤全部跳过）──────────────────────────
+      - name: Run unit tests
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: ./gradlew :app:testDebugUnitTest --no-daemon
+
+      - name: Run Android Lint
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: ./gradlew :app:lintDebug --no-daemon
+
       # ── Debug APK（始终构建）────────────────────────────────────────────
       - name: Build debug APK
         env:
