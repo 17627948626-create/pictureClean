@@ -46,6 +46,7 @@ import com.yihua.app.ui.theme.LightGrayText
 import com.yihua.app.ui.theme.SwipeUpColor
 import com.yihua.app.ui.theme.ThumbnailHighlight
 import com.yihua.app.ui.theme.TrashBadgeColor
+import com.yihua.app.viewmodel.PhotoListState
 import com.yihua.app.viewmodel.PhotoViewModel
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -228,13 +229,13 @@ private fun PhotoContent(
             .background(AppleSystemGray6)
             .statusBarsPadding()
     ) {
-        when {
-            state.isLoading -> {
+        when (state.screenState) {
+            PhotoListState.Loading -> {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = LightGrayText)
                 }
             }
-            state.isEmpty -> {
+            PhotoListState.EmptyLibrary -> {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("🎉", fontSize = 64.sp)
@@ -248,7 +249,41 @@ private fun PhotoContent(
                     }
                 }
             }
-            else -> {
+            PhotoListState.AllQueuedForDelete -> {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(32.dp)
+                    ) {
+                        Text("🗑️", fontSize = 64.sp)
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            "所有照片已加入待删除队列",
+                            color = Color(0xFF1C1C1E),
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Medium,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "共 ${state.deleteQueue.size} 张，确认后将永久删除",
+                            color = LightGrayText,
+                            fontSize = 14.sp,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(Modifier.height(24.dp))
+                        Button(
+                            onClick = onNavigateToConfirm,
+                            colors = ButtonDefaults.buttonColors(containerColor = SwipeUpColor)
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("前往确认删除", fontWeight = FontWeight.Medium)
+                        }
+                    }
+                }
+            }
+            PhotoListState.Reviewable -> {
                 if (isPartialAccess) {
                     // Android 14+ 用户选择了"部分照片"，仅显示已授权的照片
                     Box(
