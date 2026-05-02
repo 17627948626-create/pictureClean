@@ -30,6 +30,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.yihua.app.data.Photo
+import com.yihua.app.ui.theme.AppleSystemGray6
+import com.yihua.app.ui.theme.LightGrayText
 import com.yihua.app.ui.theme.SwipeUpColor
 import com.yihua.app.viewmodel.PhotoViewModel
 
@@ -70,7 +72,9 @@ fun DeleteConfirmScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                    containerColor = AppleSystemGray6,
+                    titleContentColor = Color(0xFF1C1C1E),
+                    navigationIconContentColor = Color(0xFF1C1C1E)
                 )
             )
         },
@@ -89,6 +93,7 @@ fun DeleteConfirmScreen(
             EmptyQueueContent(
                 modifier = Modifier
                     .fillMaxSize()
+                    .background(AppleSystemGray6)
                     .padding(paddingValues)
             )
         } else {
@@ -97,6 +102,7 @@ fun DeleteConfirmScreen(
                 onRemove = { viewModel.removeFromDeleteQueue(it) },
                 modifier = Modifier
                     .fillMaxSize()
+                    .background(AppleSystemGray6)
                     .padding(paddingValues)
             )
         }
@@ -203,7 +209,7 @@ private fun EmptyQueueContent(modifier: Modifier = Modifier) {
             Text(
                 "没有待删除的照片",
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = LightGrayText
             )
         }
     }

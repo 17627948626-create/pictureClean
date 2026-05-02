@@ -46,6 +46,8 @@ jobs:
 
       # ── Debug APK（始终构建）────────────────────────────────────────────
       - name: Build debug APK
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
         run: ./gradlew :app:assembleDebug --no-daemon
 
       - name: Rename debug APK
@@ -63,6 +65,7 @@ jobs:
       - name: Build signed release APK
         if: steps.signing.outputs.available == 'true'
         env:
+          BUILD_NUMBER: ${{ github.run_number }}
           SIGNING_KEYSTORE_PATH: /tmp/release.jks
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}

@@ -495,7 +495,6 @@ private fun PhotoContent(
                 BottomSection(
                     photos = state.photos,
                     currentIndex = state.currentIndex,
-                    totalCount = state.photos.size,
                     onThumbnailClick = { viewModel.goToIndex(it) }
                 )
             }
@@ -608,32 +607,18 @@ private fun PhotoCard(
 private fun BottomSection(
     photos: List<Photo>,
     currentIndex: Int,
-    totalCount: Int,
     onThumbnailClick: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
+    ThumbnailStrip(
+        photos = photos,
+        currentIndex = currentIndex,
+        onThumbnailClick = onThumbnailClick,
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(bottom = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        if (totalCount > 0) {
-            Text(
-                text = "${currentIndex + 1} / $totalCount",
-                color = LightGrayText,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(bottom = 6.dp)
-            )
-        }
-
-        ThumbnailStrip(
-            photos = photos,
-            currentIndex = currentIndex,
-            onThumbnailClick = onThumbnailClick
-        )
-    }
+            .padding(vertical = 8.dp)
+    )
 }
 
 @Composable
