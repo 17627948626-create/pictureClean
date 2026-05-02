@@ -1,6 +1,9 @@
 package com.yihua.app.ui.screens
 
 import android.os.Build
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -301,6 +304,21 @@ private fun ColumnScope.SwipeStage(
     var dragY by remember { mutableFloatStateOf(0f) }
     var handledGesture by remember { mutableStateOf(false) }
 
+    val motionSpec = spring<Float>(
+        dampingRatio = Spring.DampingRatioNoBouncy,
+        stiffness = Spring.StiffnessMediumLow
+    )
+    val animatedDragX by animateFloatAsState(
+        targetValue = dragX,
+        animationSpec = motionSpec,
+        label = "photo-drag-x"
+    )
+    val animatedDragY by animateFloatAsState(
+        targetValue = dragY,
+        animationSpec = motionSpec,
+        label = "photo-drag-y"
+    )
+
     fun resetDrag() {
         dragX = 0f
         dragY = 0f
@@ -372,9 +390,9 @@ private fun ColumnScope.SwipeStage(
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
-                        translationX = dragX.coerceIn(-160f, 160f)
-                        translationY = dragY.coerceIn(-220f, 120f)
-                        val progress = (-dragY / 360f).coerceIn(0f, 1f)
+                        translationX = animatedDragX.coerceIn(-160f, 160f)
+                        translationY = animatedDragY.coerceIn(-220f, 120f)
+                        val progress = (-animatedDragY / 360f).coerceIn(0f, 1f)
                         scaleX = 1f - progress * 0.18f
                         scaleY = 1f - progress * 0.18f
                         alpha = 1f - progress * 0.35f
