@@ -39,8 +39,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
-import com.google.accompanist.permissions.rememberPermissionState
-import com.google.accompanist.permissions.shouldShowRationale
+import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import com.yihua.app.data.Photo
 import com.yihua.app.ui.theme.AppleSystemGray6
 import com.yihua.app.ui.theme.LightGrayText
@@ -77,39 +76,55 @@ fun PhotoSwipeScreen(
     viewModel: PhotoViewModel,
     onNavigateToConfirm: () -> Unit
 ) {
-    val permissionName = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        android.Manifest.permission.READ_MEDIA_IMAGES
-    } else {
-        android.Manifest.permission.READ_EXTERNAL_STORAGE
-    }
-
-    val permissionState = rememberPermissionState(permissionName)
-
-    LaunchedEffect(permissionState.status.isGranted) {
-        if (permissionState.status.isGranted) {
-            viewModel.loadPhotos()
+    // API 34+ 用户可选"部分照片"授权：READ_MEDIA_IMAGES 仍为 denied，
+    // 但 READ_MEDIA_VISUAL_USER_SELECTED 为 granted。两者都要检查。
+    val permissionsList = remember {
+        when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> listOf(
+                android.Manifest.permission.READ_MEDIA_IMAGES,
+                android.Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
+            )
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> listOf(
+                android.Manifest.permission.READ_MEDIA_IMAGES
+            )
+            else -> listOf(android.Manifest.permission.READ_EXTERNAL_STORAGE)
         }
+    }
+    val permsState = rememberMultiplePermissionsState(permissionsList)
+
+    val hasFullAccess = permsState.permissions.any {
+        it.permission in listOf(
+            android.Manifest.permission.READ_MEDIA_IMAGES,
+            android.Manifest.permission.READ_EXTERNAL_STORAGE
+        ) && it.status.isGranted
+    }
+    val hasPartialAccess = permsState.permissions.any {
+        it.permission == android.Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED &&
+            it.status.isGranted
+    }
+    val hasAnyAccess = hasFullAccess || hasPartialAccess
+
+    LaunchedEffect(hasAnyAccess) {
+        if (hasAnyAccess) viewModel.loadPhotos()
     }
 
     when {
-        permissionState.status.isGranted -> {
-            PhotoContent(viewModel = viewModel, onNavigateToConfirm = onNavigateToConfirm)
-        }
-        permissionState.status.shouldShowRationale -> {
-            PermissionScreen(
-                message = "一划需要读取您的照片，才能帮您整理相册。",
-                buttonText = "授权访问",
-                onRequest = { permissionState.launchPermissionRequest() }
-            )
-        }
+        hasAnyAccess -> PhotoContent(
+            viewModel = viewModel,
+            onNavigateToConfirm = onNavigateToConfirm,
+            isPartialAccess = hasPartialAccess && !hasFullAccess
+        )
+        permsState.shouldShowRationale -> PermissionScreen(
+            message = "一划需要读取您的照片，才能帮您整理相册。",
+            buttonText = "授权访问",
+            onRequest = { permsState.launchMultiplePermissionRequest() }
+        )
         else -> {
-            LaunchedEffect(Unit) {
-                permissionState.launchPermissionRequest()
-            }
+            LaunchedEffect(Unit) { permsState.launchMultiplePermissionRequest() }
             PermissionScreen(
                 message = "请在弹窗中授权访问相册，让一划帮您轻松整理照片。",
                 buttonText = "重新申请授权",
-                onRequest = { permissionState.launchPermissionRequest() }
+                onRequest = { permsState.launchMultiplePermissionRequest() }
             )
         }
     }
@@ -164,7 +179,8 @@ private fun PermissionScreen(
 @Composable
 private fun PhotoContent(
     viewModel: PhotoViewModel,
-    onNavigateToConfirm: () -> Unit
+    onNavigateToConfirm: () -> Unit,
+    isPartialAccess: Boolean = false
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
@@ -233,6 +249,22 @@ private fun PhotoContent(
                 }
             }
             else -> {
+                if (isPartialAccess) {
+                    // Android 14+ 用户选择了"部分照片"，仅显示已授权的照片
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFFFFF3CD))
+                            .padding(horizontal = 16.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = "仅显示已授权的照片，如需完整相册请在系统设置中授权",
+                            color = Color(0xFF856404),
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+
                 TopBar(
                     currentPhoto = state.currentPhoto,
                     deleteQueueSize = state.deleteQueue.size,

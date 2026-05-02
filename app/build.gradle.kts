@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace = "com.yihua.app"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.yihua.app"
         minSdk = 29
-        targetSdk = 34
+        targetSdk = 35
         val buildNumber = System.getenv("BUILD_NUMBER")?.toIntOrNull() ?: 1
         versionCode = buildNumber
         versionName = "1.0.$buildNumber"
@@ -78,9 +78,9 @@ dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.04.01")
     implementation(composeBom)
 
-    implementation("androidx.core:core-ktx:1.13.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
-    implementation("androidx.activity:activity-compose:1.9.0")
+    implementation("androidx.core:core-ktx:1.15.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+    implementation("androidx.activity:activity-compose:1.9.3")
 
     // Compose
     implementation("androidx.compose.ui:ui")
@@ -94,8 +94,8 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.7.7")
 
     // ViewModel
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
 
     // Coil for image loading
     implementation("io.coil-kt:coil-compose:2.6.0")
