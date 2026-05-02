@@ -362,7 +362,7 @@ private fun ColumnScope.SwipeStage(
 
     val entryProgress by animateFloatAsState(
         targetValue = if (cardEntered) 1f else 0f,
-        animationSpec = tween(durationMillis = 170),
+        animationSpec = tween(durationMillis = 190),
         label = "photo-entry",
         finishedListener = { value ->
             if (value >= 1f) entryMotion = EntryMotion.None
@@ -537,15 +537,24 @@ private fun ColumnScope.SwipeStage(
                             val isCurrent = offset == 0
                             val clampedY = dragY.coerceIn(-240f, 0f)
                             val deleteProgress = if (isCurrent) (-clampedY / 220f).coerceIn(0f, 1f) else 0f
-                            val enterScale = if (isCurrent) 0.98f + entryProgress * 0.02f else 1f
+                            val enterScale = when {
+                                isCurrent && entryMotion == EntryMotion.FromTop -> 0.82f + entryProgress * 0.18f
+                                isCurrent -> 0.98f + entryProgress * 0.02f
+                                else -> 1f
+                            }
                             val dragScale = if (isCurrent) 1f - deleteProgress * 0.16f else 1f
                             val entryX = if (isCurrent && entryMotion == EntryMotion.FromRight) {
                                 (1f - entryProgress) * pageStep * 0.28f
                             } else 0f
                             val entryY = when {
-                                isCurrent && entryMotion == EntryMotion.FromTop -> -(1f - entryProgress) * stageHeight * 0.28f
+                                isCurrent && entryMotion == EntryMotion.FromTop -> -(1f - entryProgress) * stageHeight * 0.85f
                                 isCurrent && entryMotion != EntryMotion.None -> (1f - entryProgress) * 10f
                                 else -> 0f
+                            }
+                            val entryAlpha = when {
+                                isCurrent && entryMotion == EntryMotion.FromTop -> entryProgress
+                                isCurrent -> 0.78f + entryProgress * 0.22f
+                                else -> 1f
                             }
 
                             translationX = baseX + entryX
@@ -553,11 +562,7 @@ private fun ColumnScope.SwipeStage(
                             rotationZ = 0f
                             scaleX = enterScale * dragScale
                             scaleY = enterScale * dragScale
-                            alpha = if (isCurrent) {
-                                (0.78f + entryProgress * 0.22f) * (1f - deleteProgress * 0.32f)
-                            } else {
-                                1f
-                            }
+                            alpha = if (isCurrent) entryAlpha * (1f - deleteProgress * 0.32f) else 1f
                         }
                 )
             }
@@ -578,12 +583,12 @@ private fun ColumnScope.SwipeStage(
                                 alpha = 1f - overlayProgress
                             }
                             OverlayMotion.RestoreMoveRight -> {
-                                val moveDistance = (stageWidth.takeIf { it > 0f } ?: size.width) * 0.38f
+                                val moveDistance = (stageWidth.takeIf { it > 0f } ?: size.width) * 0.85f
                                 translationX = overlayProgress * moveDistance
-                                rotationZ = overlayProgress * 3f
-                                scaleX = 1f - overlayProgress * 0.04f
-                                scaleY = 1f - overlayProgress * 0.04f
-                                alpha = 1f - overlayProgress * 0.55f
+                                rotationZ = 0f
+                                scaleX = 1f - overlayProgress * 0.18f
+                                scaleY = 1f - overlayProgress * 0.18f
+                                alpha = 1f - overlayProgress
                             }
                             null -> Unit
                         }
