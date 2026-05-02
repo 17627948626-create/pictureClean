@@ -18,17 +18,30 @@ import kotlinx.coroutines.launch
 data class DeleteHistoryEntry(val photo: Photo, val previousIndex: Int)
 
 data class PhotoUiState(
-    val photos: List<Photo> = emptyList(),
+    val allPhotos: List<Photo> = emptyList(),
     val currentIndex: Int = 0,
     val deleteQueue: List<Photo> = emptyList(),
     val deleteHistory: List<DeleteHistoryEntry> = emptyList(),
-    val isLoading: Boolean = true,
-    val isEmpty: Boolean = false
+    val isLoading: Boolean = true
 ) {
-    val currentPhoto: Photo? get() = photos.getOrNull(currentIndex)
-    val canUndoDelete: Boolean get() = deleteHistory.isNotEmpty()
-    val isCurrentMarkedForDelete: Boolean
-        get() = currentPhoto != null && deleteQueue.any { it.id == currentPhoto!!.id }
+    private val deleteQueueIds: Set<Long> get() = deleteQueue.map { it.id }.toSet()
+
+    /** 不含待删除照片的可见列表，currentIndex 指向此列表 */
+    val visiblePhotos: List<Photo> get() = allPhotos.filter { it.id !in deleteQueueIds }
+
+    val currentPhoto: Photo? get() = visiblePhotos.getOrNull(currentIndex)
+
+    val isEmpty: Boolean get() = !isLoading && allPhotos.isEmpty()
+
+    /**
+     * 当且仅当当前位置恰好是最近一次删除发生的位置时，才允许下滑撤销。
+     * 位置匹配条件：currentIndex == previousIndex（若 previousIndex 超出新列表则钳至末尾）
+     */
+    val canSwipeDownToUndo: Boolean get() {
+        val last = deleteHistory.lastOrNull() ?: return false
+        val checkIdx = last.previousIndex.coerceAtMost(visiblePhotos.lastIndex.coerceAtLeast(0))
+        return currentIndex == checkIdx
+    }
 }
 
 class PhotoViewModel(application: Application) : AndroidViewModel(application) {
@@ -56,9 +69,8 @@ class PhotoViewModel(application: Application) : AndroidViewModel(application) {
                 .coerceIn(0, maxOf(0, photos.size - 1))
             _uiState.update {
                 it.copy(
-                    photos = photos,
+                    allPhotos = photos,
                     isLoading = false,
-                    isEmpty = photos.isEmpty(),
                     currentIndex = savedIndex,
                     deleteQueue = emptyList(),
                     deleteHistory = emptyList()
@@ -67,17 +79,17 @@ class PhotoViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** 下一张 */
+    /** 下一张（在 visiblePhotos 中前进） */
     fun swipeRight() {
         _uiState.update { state ->
             val nextIndex = state.currentIndex + 1
-            if (nextIndex >= state.photos.size) return@update state
+            if (nextIndex >= state.visiblePhotos.size) return@update state
             state.copy(currentIndex = nextIndex)
         }
         saveCurrentIndex(_uiState.value.currentIndex)
     }
 
-    /** 上一张 */
+    /** 上一张（在 visiblePhotos 中后退） */
     fun swipeLeft() {
         _uiState.update { state ->
             val prevIndex = state.currentIndex - 1
@@ -87,29 +99,35 @@ class PhotoViewModel(application: Application) : AndroidViewModel(application) {
         saveCurrentIndex(_uiState.value.currentIndex)
     }
 
-    /** 上滑 → 加入待删除队列，并自动前进到下一张 */
+    /** 上滑：将当前照片加入待删除队列，visiblePhotos 收缩，currentIndex 自动指向下一张 */
     fun swipeUp() {
         _uiState.update { state ->
             val photo = state.currentPhoto ?: return@update state
-            val newQueue = if (state.deleteQueue.any { it.id == photo.id }) {
-                state.deleteQueue
-            } else {
-                state.deleteQueue + photo
-            }
-            val nextIndex = minOf(state.currentIndex + 1, state.photos.size - 1)
+            if (state.deleteQueue.any { it.id == photo.id }) return@update state
+            val previousIndex = state.currentIndex
+            val newQueue = state.deleteQueue + photo
+            // visiblePhotos 删除一张后大小减 1，currentIndex 保持不变（滑向下一张）
+            // 若已是末尾则钳至新末尾
+            val newVisibleSize = state.visiblePhotos.size - 1
+            val newIndex = previousIndex.coerceAtMost(maxOf(0, newVisibleSize - 1))
             state.copy(
-                currentIndex = nextIndex,
+                currentIndex = newIndex,
                 deleteQueue = newQueue,
-                deleteHistory = state.deleteHistory + DeleteHistoryEntry(photo, state.currentIndex)
+                deleteHistory = state.deleteHistory + DeleteHistoryEntry(photo, previousIndex)
             )
         }
         saveCurrentIndex(_uiState.value.currentIndex)
     }
 
-    /** 下滑撤销上一步删除，返回是否成功 */
+    /**
+     * 下滑撤销：仅当 canSwipeDownToUndo 为 true 时生效。
+     * 恢复照片后 currentIndex 回到照片在 visiblePhotos 中的原位置。
+     * 返回是否发生了撤销。
+     */
     fun undoDelete(): Boolean {
         var didUndo = false
         _uiState.update { state ->
+            if (!state.canSwipeDownToUndo) return@update state
             val last = state.deleteHistory.lastOrNull() ?: return@update state
             didUndo = true
             state.copy(
@@ -122,19 +140,22 @@ class PhotoViewModel(application: Application) : AndroidViewModel(application) {
         return didUndo
     }
 
-    /** 跳转到指定索引（缩略图点击） */
+    /** 跳转到指定索引（缩略图点击，索引基于 visiblePhotos） */
     fun goToIndex(index: Int) {
         _uiState.update { state ->
-            val safeIndex = index.coerceIn(0, maxOf(0, state.photos.size - 1))
+            val safeIndex = index.coerceIn(0, maxOf(0, state.visiblePhotos.size - 1))
             state.copy(currentIndex = safeIndex)
         }
         saveCurrentIndex(_uiState.value.currentIndex)
     }
 
-    /** 从待删除队列中移除单张照片 */
+    /** 从待删除队列中移除单张照片，同时清理对应的历史记录 */
     fun removeFromDeleteQueue(photo: Photo) {
         _uiState.update { state ->
-            state.copy(deleteQueue = state.deleteQueue.filter { it.id != photo.id })
+            state.copy(
+                deleteQueue = state.deleteQueue.filter { it.id != photo.id },
+                deleteHistory = state.deleteHistory.filter { it.photo.id != photo.id }
+            )
         }
     }
 
@@ -169,18 +190,17 @@ class PhotoViewModel(application: Application) : AndroidViewModel(application) {
         return allSuccess
     }
 
-    /** 删除完成后刷新列表 */
+    /** 删除完成后从 allPhotos 中移除已删照片，刷新列表 */
     fun onDeleteCompleted() {
         _uiState.update { state ->
             val deletedIds = state.deleteQueue.map { it.id }.toSet()
-            val updatedPhotos = state.photos.filter { it.id !in deletedIds }
-            val safeIndex = minOf(state.currentIndex, maxOf(0, updatedPhotos.size - 1))
+            val updatedAllPhotos = state.allPhotos.filter { it.id !in deletedIds }
+            val safeIndex = minOf(state.currentIndex, maxOf(0, updatedAllPhotos.size - 1))
             state.copy(
-                photos = updatedPhotos,
+                allPhotos = updatedAllPhotos,
                 currentIndex = safeIndex,
                 deleteQueue = emptyList(),
-                deleteHistory = emptyList(),
-                isEmpty = updatedPhotos.isEmpty()
+                deleteHistory = emptyList()
             )
         }
         saveCurrentIndex(_uiState.value.currentIndex)

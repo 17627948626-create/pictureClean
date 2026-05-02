@@ -131,10 +131,7 @@ private fun PermissionScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(32.dp)
         ) {
-            Text(
-                text = "📷",
-                fontSize = 64.sp
-            )
+            Text(text = "📷", fontSize = 64.sp)
             Spacer(Modifier.height(24.dp))
             Text(
                 text = "一划 · 相册瘦身",
@@ -172,14 +169,18 @@ private fun PhotoContent(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
 
+    // --- 动画状态 ---
     var horizontalOffset by remember { mutableFloatStateOf(0f) }
     var verticalOffset by remember { mutableFloatStateOf(0f) }
     var cardScale by remember { mutableFloatStateOf(1f) }
     var cardAlpha by remember { mutableFloatStateOf(1f) }
-    // 上滑联动：下一张从右滑入的进度 0→1
+    // 上滑时：下一张从右侧滑入的进度 0→1
     var swipeUpProgress by remember { mutableFloatStateOf(0f) }
-    // 下滑联动：当前张向右让位的进度 0→1
+    // 下滑撤销时：被"推走"那张向右滑出的进度 0→1
     var swipeDownProgress by remember { mutableFloatStateOf(0f) }
+    // 下滑预览时：当前卡片向右偏移量（拖拽中实时更新）
+    var currentCardRightShift by remember { mutableFloatStateOf(0f) }
+
     var gestureAxis by remember { mutableStateOf<GestureAxis?>(null) }
     var isUndoAnimating by remember { mutableStateOf(false) }
 
@@ -194,9 +195,11 @@ private fun PhotoContent(
         cardAlpha = 1f
         swipeUpProgress = 0f
         swipeDownProgress = 0f
+        currentCardRightShift = 0f
     }
 
-    LaunchedEffect(state.currentIndex) {
+    // 当前卡片切换时重置变换（用照片 id 做 key，避免同 index 不同照片不触发）
+    LaunchedEffect(state.currentPhoto?.id) {
         if (!isUndoAnimating) {
             resetCardTransform()
         }
@@ -245,7 +248,7 @@ private fun PhotoContent(
                             cardWidthPx = it.width.toFloat()
                             cardHeightPx = it.height.toFloat()
                         }
-                        .pointerInput(state.currentIndex, state.photos.size) {
+                        .pointerInput(state.currentIndex, state.visiblePhotos.size) {
                             var lockedAxis: GestureAxis? = null
                             var totalDragX = 0f
                             var totalDragY = 0f
@@ -276,7 +279,7 @@ private fun PhotoContent(
                                                         viewModel.swipeLeft()
                                                         resetCardTransform()
                                                     }
-                                                    x < -threshold && state.currentIndex < state.photos.size - 1 -> {
+                                                    x < -threshold && state.currentIndex < state.visiblePhotos.size - 1 -> {
                                                         animateFloat(
                                                             initialValue = horizontalOffset,
                                                             targetValue = -(cardWidthPx + gapPx),
@@ -294,9 +297,11 @@ private fun PhotoContent(
                                                     }
                                                 }
                                             }
+
                                             GestureAxis.VERTICAL -> {
-                                                val y = verticalOffset
+                                                val y = totalDragY
                                                 when {
+                                                    // 上滑：删除
                                                     y < -threshold -> {
                                                         val spec = tween<Float>(300, easing = FastOutSlowInEasing)
                                                         val yJob = launch {
@@ -308,7 +313,6 @@ private fun PhotoContent(
                                                         val alphaJob = launch {
                                                             animateFloat(cardAlpha, 0f, spec) { cardAlpha = it }
                                                         }
-                                                        // 下一张同步从右侧滑入
                                                         val upProgressJob = launch {
                                                             animateFloat(0f, 1f, spec) { swipeUpProgress = it }
                                                         }
@@ -316,11 +320,14 @@ private fun PhotoContent(
                                                         viewModel.swipeUp()
                                                         resetCardTransform()
                                                     }
-                                                    y > threshold -> {
+
+                                                    // 下滑：撤销删除（仅当位置匹配时）
+                                                    y > threshold && state.canSwipeDownToUndo -> {
                                                         isUndoAnimating = true
+                                                        currentCardRightShift = 0f
                                                         val didUndo = viewModel.undoDelete()
                                                         if (didUndo) {
-                                                            // 恢复的照片从上方飞入初始状态
+                                                            // 恢复照片从顶部飞入；被推走那张向右让位
                                                             verticalOffset = -cardHeightPx
                                                             cardScale = 0.5f
                                                             cardAlpha = 0f
@@ -336,22 +343,24 @@ private fun PhotoContent(
                                                             val alphaJob = launch {
                                                                 animateFloat(0f, 1f, spec) { cardAlpha = it }
                                                             }
-                                                            // 之前那张同步向右让位
                                                             val downProgressJob = launch {
                                                                 animateFloat(0f, 1f, spec) { swipeDownProgress = it }
                                                             }
                                                             yJob.join(); scaleJob.join(); alphaJob.join(); downProgressJob.join()
-                                                        } else {
-                                                            animateFloat(
-                                                                initialValue = verticalOffset,
-                                                                targetValue = 0f,
-                                                                animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy)
-                                                            ) { verticalOffset = it }
                                                         }
                                                         isUndoAnimating = false
                                                         resetCardTransform()
                                                     }
+
+                                                    // 其余情况：弹回
                                                     else -> {
+                                                        val shiftJob = launch {
+                                                            animateFloat(
+                                                                initialValue = currentCardRightShift,
+                                                                targetValue = 0f,
+                                                                animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy)
+                                                            ) { currentCardRightShift = it }
+                                                        }
                                                         val yJob = launch {
                                                             animateFloat(
                                                                 initialValue = verticalOffset,
@@ -373,12 +382,11 @@ private fun PhotoContent(
                                                                 animationSpec = spring()
                                                             ) { cardAlpha = it }
                                                         }
-                                                        yJob.join()
-                                                        scaleJob.join()
-                                                        alphaJob.join()
+                                                        shiftJob.join(); yJob.join(); scaleJob.join(); alphaJob.join()
                                                     }
                                                 }
                                             }
+
                                             null -> resetCardTransform()
                                         }
                                     }
@@ -386,38 +394,22 @@ private fun PhotoContent(
                                 },
                                 onDragCancel = {
                                     scope.launch {
+                                        val shiftJob = launch {
+                                            animateFloat(currentCardRightShift, 0f, spring()) { currentCardRightShift = it }
+                                        }
                                         val xJob = launch {
-                                            animateFloat(
-                                                initialValue = horizontalOffset,
-                                                targetValue = 0f,
-                                                animationSpec = spring()
-                                            ) { horizontalOffset = it }
+                                            animateFloat(horizontalOffset, 0f, spring()) { horizontalOffset = it }
                                         }
                                         val yJob = launch {
-                                            animateFloat(
-                                                initialValue = verticalOffset,
-                                                targetValue = 0f,
-                                                animationSpec = spring()
-                                            ) { verticalOffset = it }
+                                            animateFloat(verticalOffset, 0f, spring()) { verticalOffset = it }
                                         }
                                         val scaleJob = launch {
-                                            animateFloat(
-                                                initialValue = cardScale,
-                                                targetValue = 1f,
-                                                animationSpec = spring()
-                                            ) { cardScale = it }
+                                            animateFloat(cardScale, 1f, spring()) { cardScale = it }
                                         }
                                         val alphaJob = launch {
-                                            animateFloat(
-                                                initialValue = cardAlpha,
-                                                targetValue = 1f,
-                                                animationSpec = spring()
-                                            ) { cardAlpha = it }
+                                            animateFloat(cardAlpha, 1f, spring()) { cardAlpha = it }
                                         }
-                                        xJob.join()
-                                        yJob.join()
-                                        scaleJob.join()
-                                        alphaJob.join()
+                                        shiftJob.join(); xJob.join(); yJob.join(); scaleJob.join(); alphaJob.join()
                                     }
                                     clearDragState()
                                 },
@@ -440,16 +432,29 @@ private fun PhotoContent(
                                         GestureAxis.HORIZONTAL -> {
                                             horizontalOffset = totalDragX
                                             verticalOffset = 0f
+                                            currentCardRightShift = 0f
                                             cardScale = 1f
                                             cardAlpha = 1f
                                         }
                                         GestureAxis.VERTICAL -> {
                                             horizontalOffset = 0f
-                                            verticalOffset = totalDragY
-                                            val safeHeight = cardHeightPx.takeIf { it > 0f } ?: 1f
-                                            val progress = (abs(verticalOffset) / safeHeight).coerceIn(0f, 1f)
-                                            cardScale = 1f - progress * 0.5f
-                                            cardAlpha = 1f - progress * 0.8f
+                                            if (totalDragY < 0) {
+                                                // 上滑：缩放淡出预览
+                                                verticalOffset = totalDragY
+                                                currentCardRightShift = 0f
+                                                val safeHeight = cardHeightPx.takeIf { it > 0f } ?: 1f
+                                                val progress = (-totalDragY / safeHeight).coerceIn(0f, 1f)
+                                                cardScale = 1f - progress * 0.5f
+                                                cardAlpha = 1f - progress * 0.8f
+                                            } else {
+                                                // 下滑：当前卡片右移预览（仅当可撤销时才有视觉反馈）
+                                                verticalOffset = 0f
+                                                cardScale = 1f
+                                                cardAlpha = 1f
+                                                currentCardRightShift = if (state.canSwipeDownToUndo) {
+                                                    (totalDragY * 0.4f).coerceAtLeast(0f)
+                                                } else 0f
+                                            }
                                         }
                                         null -> Unit
                                     }
@@ -457,13 +462,13 @@ private fun PhotoContent(
                             )
                         }
                 ) {
+                    // 渲染前一张、当前、后一张（基于 visiblePhotos）
                     listOf(-1, 0, 1).forEach { offset ->
                         val index = state.currentIndex + offset
-                        val photo = state.photos.getOrNull(index)
+                        val photo = state.visiblePhotos.getOrNull(index)
                         if (photo != null) {
                             PhotoCard(
                                 photo = photo,
-                                isMarkedForDelete = state.deleteQueue.any { it.id == photo.id },
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .graphicsLayer {
@@ -472,9 +477,12 @@ private fun PhotoContent(
                                             // 上滑：下一张从右侧滑入中间
                                             offset == 1 && swipeUpProgress > 0f ->
                                                 step * (1f - swipeUpProgress)
-                                            // 下滑撤销：之前那张从中间让位到右侧
+                                            // 下滑撤销动画：被推走那张（原当前）从中间移到右侧
                                             offset == 1 && isUndoAnimating ->
                                                 step * swipeDownProgress
+                                            // 当前卡片：叠加右移预览偏移
+                                            offset == 0 ->
+                                                horizontalOffset + currentCardRightShift
                                             else ->
                                                 horizontalOffset + offset * step
                                         }
@@ -491,9 +499,8 @@ private fun PhotoContent(
                 }
 
                 BottomSection(
-                    photos = state.photos,
+                    photos = state.visiblePhotos,
                     currentIndex = state.currentIndex,
-                    totalCount = state.photos.size,
                     onThumbnailClick = { viewModel.goToIndex(it) }
                 )
             }
@@ -559,7 +566,6 @@ private fun TopBar(
 @Composable
 private fun PhotoCard(
     photo: Photo,
-    isMarkedForDelete: Boolean,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -576,18 +582,6 @@ private fun PhotoCard(
                 .fillMaxSize()
                 .clip(RoundedCornerShape(16.dp))
         )
-
-        if (isMarkedForDelete) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(12.dp)
-                    .background(SwipeUpColor.copy(alpha = 0.9f), RoundedCornerShape(8.dp))
-                    .padding(horizontal = 10.dp, vertical = 4.dp)
-            ) {
-                Text("待删除", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-            }
-        }
     }
 }
 
@@ -595,7 +589,6 @@ private fun PhotoCard(
 private fun BottomSection(
     photos: List<Photo>,
     currentIndex: Int,
-    totalCount: Int,
     onThumbnailClick: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -606,9 +599,9 @@ private fun BottomSection(
             .padding(bottom = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        if (totalCount > 0) {
+        if (photos.isNotEmpty()) {
             Text(
-                text = "${currentIndex + 1} / $totalCount",
+                text = "${currentIndex + 1} / ${photos.size}",
                 color = LightGrayText,
                 fontSize = 12.sp,
                 modifier = Modifier.padding(bottom = 6.dp)
