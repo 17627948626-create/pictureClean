@@ -316,7 +316,11 @@ private fun PhotoContent(
                             cardWidthPx = it.width.toFloat()
                             cardHeightPx = it.height.toFloat()
                         }
-                        .pointerInput(state.currentIndex, state.visiblePhotos.size) {
+                        .pointerInput(state.currentIndex, state.visiblePhotos.size, isAnimating) {
+                            // 动画进行时立即退出块，禁止启动新的手势检测
+                            if (isAnimating) return@pointerInput
+                            gestureAxis = null
+
                             var lockedAxis: GestureAxis? = null
                             var totalDragX = 0f
                             var totalDragY = 0f
