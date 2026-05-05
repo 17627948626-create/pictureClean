@@ -85,23 +85,18 @@ private const val SwipeTriggerPx = 72f
 private const val DirectionLockPx = 10f
 private const val DirectionRatio = 1.15f
 
-private enum class GestureDirection {
-    Left,
-    Right,
-    Up,
-    Down
+private enum class GestureDirection { Left, Right, Up, Down }
+
+private enum class CardMotion {
+    FlyToLeft,
+    FlyToTop,
+    CoverFromLeft,
+    CoverFromTop
 }
 
-private enum class OverlayMotion {
-    FlyLeft,
-    FlyUp,
-    EnterFromLeft,
-    EnterFromTop
-}
-
-private data class OverlayCardState(
+private data class AnimatedCard(
     val photo: Photo,
-    val motion: OverlayMotion,
+    val motion: CardMotion,
     val startX: Float = 0f,
     val startY: Float = 0f
 )
@@ -230,55 +225,11 @@ private fun PhotoContent(
                 }
             }
 
-            PhotoListState.EmptyLibrary -> {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("🎉", fontSize = 64.sp)
-                        Spacer(Modifier.height(16.dp))
-                        Text(
-                            "相册已整理完毕！",
-                            color = Color(0xFF1C1C1E),
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-            }
-
-            PhotoListState.AllQueuedForDelete -> {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(32.dp)
-                    ) {
-                        Text("🗑️", fontSize = 64.sp)
-                        Spacer(Modifier.height(16.dp))
-                        Text(
-                            "所有照片已加入待删除队列",
-                            color = Color(0xFF1C1C1E),
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Medium,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            "共 ${state.deleteQueue.size} 张，确认后将永久删除",
-                            color = LightGrayText,
-                            fontSize = 14.sp,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(Modifier.height(24.dp))
-                        Button(
-                            onClick = onNavigateToConfirm,
-                            colors = ButtonDefaults.buttonColors(containerColor = SwipeUpColor)
-                        ) {
-                            Icon(Icons.Default.Delete, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("前往确认删除", fontWeight = FontWeight.Medium)
-                        }
-                    }
-                }
-            }
+            PhotoListState.EmptyLibrary -> EmptyLibraryState()
+            PhotoListState.AllQueuedForDelete -> AllQueuedForDeleteState(
+                deleteQueueSize = state.deleteQueue.size,
+                onNavigateToConfirm = onNavigateToConfirm
+            )
 
             PhotoListState.Reviewable -> {
                 if (isPartialAccess) PartialAccessBanner()
@@ -291,10 +242,10 @@ private fun PhotoContent(
 
                 SwipeStage(
                     state = state,
-                    onSwipeLeftToNext = viewModel::swipeRight,
-                    onSwipeRightToPrevious = viewModel::swipeLeft,
-                    onSwipeUpToDelete = viewModel::swipeUp,
-                    onSwipeDownUndo = { viewModel.undoDelete() }
+                    onGoToNextPhoto = viewModel::goToNextPhoto,
+                    onGoToPreviousPhoto = viewModel::goToPreviousPhoto,
+                    onQueueCurrentPhotoForDeletion = viewModel::queueCurrentPhotoForDeletion,
+                    onRestoreLastDeletedPhoto = viewModel::restoreLastDeletedPhoto
                 )
 
                 BottomSection(
@@ -302,6 +253,61 @@ private fun PhotoContent(
                     currentIndex = state.currentIndex,
                     onThumbnailClick = viewModel::goToIndex
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyLibraryState() {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("🎉", fontSize = 64.sp)
+            Spacer(Modifier.height(16.dp))
+            Text(
+                "相册已整理完毕！",
+                color = Color(0xFF1C1C1E),
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
+@Composable
+private fun AllQueuedForDeleteState(
+    deleteQueueSize: Int,
+    onNavigateToConfirm: () -> Unit
+) {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(32.dp)
+        ) {
+            Text("🗑️", fontSize = 64.sp)
+            Spacer(Modifier.height(16.dp))
+            Text(
+                "所有照片已加入待删除队列",
+                color = Color(0xFF1C1C1E),
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Medium,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "共 $deleteQueueSize 张，确认后将永久删除",
+                color = LightGrayText,
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(24.dp))
+            Button(
+                onClick = onNavigateToConfirm,
+                colors = ButtonDefaults.buttonColors(containerColor = SwipeUpColor)
+            ) {
+                Icon(Icons.Default.Delete, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("前往确认删除", fontWeight = FontWeight.Medium)
             }
         }
     }
@@ -326,30 +332,30 @@ private fun PartialAccessBanner() {
 @Composable
 private fun ColumnScope.SwipeStage(
     state: PhotoUiState,
-    onSwipeLeftToNext: () -> Unit,
-    onSwipeRightToPrevious: () -> Unit,
-    onSwipeUpToDelete: () -> Unit,
-    onSwipeDownUndo: () -> Boolean
+    onGoToNextPhoto: () -> Unit,
+    onGoToPreviousPhoto: () -> Unit,
+    onQueueCurrentPhotoForDeletion: () -> Unit,
+    onRestoreLastDeletedPhoto: () -> Boolean
 ) {
     val scope = rememberCoroutineScope()
-    val overlayProgress = remember { Animatable(0f) }
+    val progress = remember { Animatable(0f) }
 
     var dragX by remember { mutableFloatStateOf(0f) }
     var dragY by remember { mutableFloatStateOf(0f) }
     var gestureDirection by remember { mutableStateOf<GestureDirection?>(null) }
-    var handledGesture by remember { mutableStateOf(false) }
+    var gestureHandled by remember { mutableStateOf(false) }
     var animationRunning by remember { mutableStateOf(false) }
 
     var stageWidth by remember { mutableFloatStateOf(0f) }
     var stageHeight by remember { mutableFloatStateOf(0f) }
-    var overlayCard by remember { mutableStateOf<OverlayCardState?>(null) }
-    var baseOverridePhoto by remember { mutableStateOf<Photo?>(null) }
+    var animatedCard by remember { mutableStateOf<AnimatedCard?>(null) }
+    var basePhotoDuringCoverIn by remember { mutableStateOf<Photo?>(null) }
 
-    fun resetDrag() {
+    fun resetGesture() {
         dragX = 0f
         dragY = 0f
         gestureDirection = null
-        handledGesture = false
+        gestureHandled = false
     }
 
     fun lockDirection(totalX: Float, totalY: Float): GestureDirection? {
@@ -370,10 +376,10 @@ private fun ColumnScope.SwipeStage(
         val fromY = dragY
         scope.launch {
             animationRunning = true
-            val xAnim = Animatable(fromX)
-            val yAnim = Animatable(fromY)
+            val x = Animatable(fromX)
+            val y = Animatable(fromY)
             launch {
-                xAnim.animateTo(
+                x.animateTo(
                     targetValue = 0f,
                     animationSpec = spring(
                         dampingRatio = Spring.DampingRatioNoBouncy,
@@ -381,70 +387,67 @@ private fun ColumnScope.SwipeStage(
                     )
                 ) { dragX = value }
             }
-            yAnim.animateTo(
+            y.animateTo(
                 targetValue = 0f,
                 animationSpec = spring(
                     dampingRatio = Spring.DampingRatioNoBouncy,
                     stiffness = Spring.StiffnessMediumLow
                 )
             ) { dragY = value }
-            resetDrag()
+            resetGesture()
             animationRunning = false
         }
     }
 
-    fun startOutgoing(
+    fun flyCurrentCardOut(
         photo: Photo,
-        motion: OverlayMotion,
+        motion: CardMotion,
         startX: Float,
         startY: Float,
-        commitState: () -> Unit
+        updateState: () -> Unit
     ) {
         scope.launch {
             animationRunning = true
-            handledGesture = true
-            overlayProgress.snapTo(0f)
-            overlayCard = OverlayCardState(
+            gestureHandled = true
+            progress.snapTo(0f)
+            animatedCard = AnimatedCard(
                 photo = photo,
                 motion = motion,
                 startX = startX,
                 startY = startY
             )
-            commitState()
-            resetDrag()
-            overlayProgress.animateTo(
+            updateState()
+            resetGesture()
+            progress.animateTo(
                 targetValue = 1f,
                 animationSpec = tween(
                     durationMillis = 150,
                     easing = FastOutLinearInEasing
                 )
             )
-            overlayCard = null
-            baseOverridePhoto = null
-            overlayProgress.snapTo(0f)
+            animatedCard = null
+            basePhotoDuringCoverIn = null
+            progress.snapTo(0f)
             animationRunning = false
         }
     }
 
-    fun startCoverIn(
+    fun coverCurrentCard(
         incomingPhoto: Photo,
-        oldBasePhoto: Photo?,
-        motion: OverlayMotion,
-        commitState: () -> Boolean
+        currentPhoto: Photo?,
+        motion: CardMotion,
+        updateState: () -> Boolean
     ) {
         scope.launch {
             animationRunning = true
-            handledGesture = true
-            overlayProgress.snapTo(0f)
-            baseOverridePhoto = oldBasePhoto
-            overlayCard = OverlayCardState(
-                photo = incomingPhoto,
-                motion = motion
-            )
-            val committed = commitState()
-            if (committed) {
-                resetDrag()
-                overlayProgress.animateTo(
+            gestureHandled = true
+            progress.snapTo(0f)
+            basePhotoDuringCoverIn = currentPhoto
+            animatedCard = AnimatedCard(photo = incomingPhoto, motion = motion)
+            val updated = updateState()
+            if (updated) {
+                resetGesture()
+                progress.animateTo(
                     targetValue = 1f,
                     animationSpec = tween(
                         durationMillis = 200,
@@ -452,19 +455,19 @@ private fun ColumnScope.SwipeStage(
                     )
                 )
             }
-            overlayCard = null
-            baseOverridePhoto = null
-            overlayProgress.snapTo(0f)
+            animatedCard = null
+            basePhotoDuringCoverIn = null
+            progress.snapTo(0f)
             animationRunning = false
         }
     }
 
     LaunchedEffect(state.currentPhoto?.id) {
         if (!animationRunning) {
-            resetDrag()
-            overlayCard = null
-            baseOverridePhoto = null
-            overlayProgress.snapTo(0f)
+            resetGesture()
+            animatedCard = null
+            basePhotoDuringCoverIn = null
+            progress.snapTo(0f)
         }
     }
 
@@ -481,7 +484,7 @@ private fun ColumnScope.SwipeStage(
                 state.currentPhoto?.id,
                 state.currentIndex,
                 state.visiblePhotos.size,
-                state.canSwipeDownToUndo
+                state.canRestoreLastDeletedPhoto
             ) {
                 var totalX = 0f
                 var totalY = 0f
@@ -490,14 +493,14 @@ private fun ColumnScope.SwipeStage(
                         totalX = 0f
                         totalY = 0f
                         gestureDirection = null
-                        handledGesture = false
+                        gestureHandled = false
                     },
                     onDragCancel = {
-                        if (!handledGesture && (dragX != 0f || dragY != 0f)) springBack() else resetDrag()
+                        if (!gestureHandled && (dragX != 0f || dragY != 0f)) springBack() else resetGesture()
                     },
                     onDrag = { change, dragAmount ->
                         change.consume()
-                        if (handledGesture || animationRunning) return@detectDragGestures
+                        if (gestureHandled || animationRunning) return@detectDragGestures
 
                         totalX += dragAmount.x
                         totalY += dragAmount.y
@@ -524,7 +527,7 @@ private fun ColumnScope.SwipeStage(
                         }
                     },
                     onDragEnd = {
-                        if (handledGesture || animationRunning) return@detectDragGestures
+                        if (gestureHandled || animationRunning) return@detectDragGestures
 
                         val absX = abs(totalX)
                         val absY = abs(totalY)
@@ -532,93 +535,97 @@ private fun ColumnScope.SwipeStage(
 
                         when (gestureDirection) {
                             GestureDirection.Left -> {
-                                val canGoNext = state.currentIndex < state.visiblePhotos.lastIndex
-                                val accepted = canGoNext && totalX < -SwipeTriggerPx && absX > absY * DirectionRatio
+                                val accepted = state.currentIndex < state.visiblePhotos.lastIndex &&
+                                    totalX < -SwipeTriggerPx &&
+                                    absX > absY * DirectionRatio
                                 if (accepted && currentPhoto != null) {
-                                    startOutgoing(
+                                    flyCurrentCardOut(
                                         photo = currentPhoto,
-                                        motion = OverlayMotion.FlyLeft,
+                                        motion = CardMotion.FlyToLeft,
                                         startX = dragX,
                                         startY = 0f,
-                                        commitState = onSwipeLeftToNext
-                                    )
-                                } else {
-                                    springBack()
-                                }
-                            }
-                            GestureDirection.Up -> {
-                                val accepted = totalY < -SwipeTriggerPx && absY > absX * DirectionRatio
-                                if (accepted && currentPhoto != null) {
-                                    startOutgoing(
-                                        photo = currentPhoto,
-                                        motion = OverlayMotion.FlyUp,
-                                        startX = 0f,
-                                        startY = dragY,
-                                        commitState = onSwipeUpToDelete
+                                        updateState = onGoToNextPhoto
                                     )
                                 } else {
                                     springBack()
                                 }
                             }
                             GestureDirection.Right -> {
-                                val canGoPrevious = state.currentIndex > 0
-                                val incomingPhoto = state.visiblePhotos.getOrNull(state.currentIndex - 1)
-                                val accepted = canGoPrevious && totalX > SwipeTriggerPx && absX > absY * DirectionRatio
-                                if (accepted && incomingPhoto != null) {
-                                    startCoverIn(
-                                        incomingPhoto = incomingPhoto,
-                                        oldBasePhoto = currentPhoto,
-                                        motion = OverlayMotion.EnterFromLeft,
-                                        commitState = {
-                                            onSwipeRightToPrevious()
+                                val previousPhoto = state.visiblePhotos.getOrNull(state.currentIndex - 1)
+                                val accepted = previousPhoto != null &&
+                                    totalX > SwipeTriggerPx &&
+                                    absX > absY * DirectionRatio
+                                if (accepted) {
+                                    coverCurrentCard(
+                                        incomingPhoto = previousPhoto,
+                                        currentPhoto = currentPhoto,
+                                        motion = CardMotion.CoverFromLeft,
+                                        updateState = {
+                                            onGoToPreviousPhoto()
                                             true
                                         }
                                     )
                                 } else {
-                                    resetDrag()
+                                    resetGesture()
+                                }
+                            }
+                            GestureDirection.Up -> {
+                                val accepted = totalY < -SwipeTriggerPx && absY > absX * DirectionRatio
+                                if (accepted && currentPhoto != null) {
+                                    flyCurrentCardOut(
+                                        photo = currentPhoto,
+                                        motion = CardMotion.FlyToTop,
+                                        startX = 0f,
+                                        startY = dragY,
+                                        updateState = onQueueCurrentPhotoForDeletion
+                                    )
+                                } else {
+                                    springBack()
                                 }
                             }
                             GestureDirection.Down -> {
-                                val incomingPhoto = state.deleteHistory.lastOrNull()?.photo
-                                val accepted = state.canSwipeDownToUndo && totalY > SwipeTriggerPx && absY > absX * DirectionRatio
-                                if (accepted && incomingPhoto != null) {
-                                    startCoverIn(
-                                        incomingPhoto = incomingPhoto,
-                                        oldBasePhoto = currentPhoto,
-                                        motion = OverlayMotion.EnterFromTop,
-                                        commitState = onSwipeDownUndo
+                                val restoredPhoto = state.deleteHistory.lastOrNull()?.photo
+                                val accepted = state.canRestoreLastDeletedPhoto &&
+                                    restoredPhoto != null &&
+                                    totalY > SwipeTriggerPx &&
+                                    absY > absX * DirectionRatio
+                                if (accepted) {
+                                    coverCurrentCard(
+                                        incomingPhoto = restoredPhoto,
+                                        currentPhoto = currentPhoto,
+                                        motion = CardMotion.CoverFromTop,
+                                        updateState = onRestoreLastDeletedPhoto
                                     )
                                 } else {
-                                    resetDrag()
+                                    resetGesture()
                                 }
                             }
-                            null -> resetDrag()
+                            null -> resetGesture()
                         }
                     }
                 )
             },
         contentAlignment = Alignment.Center
     ) {
-        val displayPhoto = baseOverridePhoto ?: state.currentPhoto
-        val clampedDragY = dragY.coerceAtMost(0f)
-        val deletePreviewProgress = (-clampedDragY / 220f).coerceIn(0f, 1f)
+        val basePhoto = basePhotoDuringCoverIn ?: state.currentPhoto
+        val deletePreviewProgress = (-dragY.coerceAtMost(0f) / 220f).coerceIn(0f, 1f)
         val currentScale = 1f - deletePreviewProgress * 0.15f
 
-        displayPhoto?.let { photo ->
+        basePhoto?.let { photo ->
             PhotoCard(
                 photo = photo,
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
                         translationX = dragX
-                        translationY = clampedDragY
+                        translationY = dragY.coerceAtMost(0f)
                         scaleX = currentScale
                         scaleY = currentScale
                     }
             )
         }
 
-        overlayCard?.let { card ->
+        animatedCard?.let { card ->
             PhotoCard(
                 photo = card.photo,
                 modifier = Modifier
@@ -626,25 +633,24 @@ private fun ColumnScope.SwipeStage(
                     .graphicsLayer {
                         val width = stageWidth.takeIf { it > 0f } ?: size.width
                         val height = stageHeight.takeIf { it > 0f } ?: size.height
-                        val progress = overlayProgress.value
                         when (card.motion) {
-                            OverlayMotion.FlyLeft -> {
+                            CardMotion.FlyToLeft -> {
                                 val endX = -width * 1.1f
-                                translationX = card.startX + (endX - card.startX) * progress
+                                translationX = card.startX + (endX - card.startX) * progress.value
                                 translationY = card.startY
                             }
-                            OverlayMotion.FlyUp -> {
+                            CardMotion.FlyToTop -> {
                                 val endY = -height * 1.1f
                                 translationX = card.startX
-                                translationY = card.startY + (endY - card.startY) * progress
+                                translationY = card.startY + (endY - card.startY) * progress.value
                             }
-                            OverlayMotion.EnterFromLeft -> {
-                                translationX = -width * (1f - progress)
+                            CardMotion.CoverFromLeft -> {
+                                translationX = -width * (1f - progress.value)
                                 translationY = 0f
                             }
-                            OverlayMotion.EnterFromTop -> {
+                            CardMotion.CoverFromTop -> {
                                 translationX = 0f
-                                translationY = -height * (1f - progress)
+                                translationY = -height * (1f - progress.value)
                             }
                         }
                     }
