@@ -552,10 +552,8 @@ private fun ColumnScope.SwipeStage(
                             }
                             GestureDirection.Right -> {
                                 val previousPhoto = state.visiblePhotos.getOrNull(state.currentIndex - 1)
-                                val accepted = previousPhoto != null &&
-                                    totalX > SwipeTriggerPx &&
-                                    absX > absY * DirectionRatio
-                                if (accepted) {
+                                val accepted = totalX > SwipeTriggerPx && absX > absY * DirectionRatio
+                                if (accepted && previousPhoto != null) {
                                     coverCurrentCard(
                                         incomingPhoto = previousPhoto,
                                         currentPhoto = currentPhoto,
@@ -586,10 +584,9 @@ private fun ColumnScope.SwipeStage(
                             GestureDirection.Down -> {
                                 val restoredPhoto = state.deleteHistory.lastOrNull()?.photo
                                 val accepted = state.canRestoreLastDeletedPhoto &&
-                                    restoredPhoto != null &&
                                     totalY > SwipeTriggerPx &&
                                     absY > absX * DirectionRatio
-                                if (accepted) {
+                                if (accepted && restoredPhoto != null) {
                                     coverCurrentCard(
                                         incomingPhoto = restoredPhoto,
                                         currentPhoto = currentPhoto,
