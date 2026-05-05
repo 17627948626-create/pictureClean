@@ -238,6 +238,11 @@ private fun PhotoContent(
                 }
             }
 
+            state.screenState == PhotoListState.LoadFailed -> LoadFailedState(
+                message = state.errorMessage ?: "照片加载失败，请检查相册权限后重试。",
+                onRetry = viewModel::loadPhotos
+            )
+
             state.screenState == PhotoListState.EmptyLibrary -> EmptyLibraryState()
 
             stageState != null -> ReviewablePhotoContent(
@@ -310,6 +315,45 @@ private fun EmptyLibraryState() {
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Medium
             )
+        }
+    }
+}
+
+@Composable
+private fun LoadFailedState(
+    message: String,
+    onRetry: () -> Unit
+) {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(32.dp)
+        ) {
+            Text("⚠️", fontSize = 56.sp)
+            Spacer(Modifier.height(16.dp))
+            Text(
+                "照片加载失败",
+                color = Color(0xFF1C1C1E),
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Medium
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = message,
+                color = LightGrayText,
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(24.dp))
+            Button(
+                onClick = onRetry,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF1C1C1E),
+                    contentColor = Color.White
+                )
+            ) {
+                Text("重试", fontWeight = FontWeight.Medium)
+            }
         }
     }
 }
