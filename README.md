@@ -1,93 +1,57 @@
-# YiHua - 照片清理 App
+# pictureClean / 一划
 
-Android 照片管理应用，支持滑动快速删除照片。
+Android 照片快速清理 App。核心目标是让用户用最少的动作完成照片去留判断。
 
----
+## 当前核心交互
 
-## APK 构建与下载
+| 手势 | 结果 | 动画语义 |
+|------|------|----------|
+| 从右往左划 | 下一张 | 当前照片向左飞出，下一张自然露出 |
+| 从左往右划 | 上一张 | 上一张从左侧盖回来 |
+| 上划 | 加入待删除队列 | 当前照片向上飞出 |
+| 下划 | 恢复最近误删 | 最近误删照片从顶部盖回来 |
 
-### 如何触发 APK 构建
+关键原则：
 
-有两种方式：
+- 当前只展示一张照片，永远居中。
+- 删除是业务状态变化，不能依赖动画结束后才入队。
+- 动画只做视觉反馈，不能决定照片是否进入待删除队列。
 
-1. **自动触发**：向 `main` 分支推送代码，GitHub Actions 自动构建。
-2. **手动触发**：
-   - 打开仓库页面 → Actions → **Build APK** → **Run workflow** → **Run workflow**
+## 当前发版状态
 
-### 在哪里下载 APK
+发版前先看根目录的 `RELEASE_BLOCKERS_REVIEW.md`。
 
-构建完成后，APK 发布在 **Releases** 页面：
+只要里面仍有未完成的 P0，默认不能正式发版。
 
-```
-https://github.com/17627948626-create/pictureClean/releases
-```
+## 文档索引
 
-每次构建会同时上传：
-
-| 文件 | 说明 |
+| 文档 | 用途 |
 |------|------|
-| `YiHua-debug-N.apk` | Debug APK，始终构建，签名不稳定 |
-| `YiHua-release-N.apk` | Signed Release APK，需配置 secrets |
+| `docs/SWIPE_ANIMATION_V2.md` | 当前滑动动画与交互规格 |
+| `docs/DELETE_FLOW_BASELINE.md` | 删除流程的业务底线与回归清单 |
+| `docs/RELEASE_PROCESS.md` | APK 构建、下载、签名、通知配置 |
+| `RELEASE_BLOCKERS_REVIEW.md` | 当前短期发版阻塞项，P0 修完后应归档或删除 |
 
-### 安卓手机如何安装 APK
+## 本地开发
 
-1. 用手机浏览器打开上方 Releases 链接，下载 APK 文件。
-2. 下载完成后点击文件，系统会提示「安装未知来源应用」。
-3. 进入 **设置 → 安全 → 安装未知应用**，允许浏览器安装。
-4. 返回点击 APK，按提示安装即可。
-
-> **推荐安装 Release APK**，签名稳定，支持直接覆盖安装升级。
-
----
-
-## 配置签名（Signed Release APK）
-
-### 第一步：生成 keystore 文件
+常用命令：
 
 ```bash
-keytool -genkey -v -keystore release.jks -alias yihua \
-  -keyalg RSA -keysize 2048 -validity 10000
+./gradlew :app:testDebugUnitTest --no-daemon
+./gradlew :app:lintDebug --no-daemon
+./gradlew :app:assembleDebug --no-daemon
 ```
 
-按提示填写密码和信息。生成的 `release.jks` 文件**不要提交到 Git**。
+## APK 获取
 
-### 第二步：将 keystore 转为 Base64
+推送到 `main` 后，GitHub Actions 会自动构建 APK。也可以在 Actions 页面手动触发 **Build APK** workflow。
 
-```bash
-base64 -i release.jks | tr -d '\n'
-```
-
-复制输出的完整字符串，备用。
-
-### 第三步：在 GitHub 仓库配置 Secrets
-
-进入仓库 **Settings → Secrets and variables → Actions → New repository secret**，添加以下 4 个 Secret：
-
-| Secret 名称 | 填写内容 |
-|-------------|----------|
-| `ANDROID_KEYSTORE_BASE64` | 上一步复制的 Base64 字符串 |
-| `ANDROID_KEYSTORE_PASSWORD` | keystore 的 store 密码 |
-| `ANDROID_KEY_ALIAS` | 生成时填写的 alias（如 `yihua`） |
-| `ANDROID_KEY_PASSWORD` | alias 对应的 key 密码 |
-
-### 验证
-
-配置完成后，推送任意 commit 触发构建。构建成功后 Release 页面会出现 `YiHua-release-N.apk`，Release 说明中会显示 **✅ 已签名**。
-
----
-
-## 可选：飞书构建通知
-
-在仓库 **Settings → Secrets → Actions** 中添加 `FEISHU_BOT_WEBHOOK`，
-构建成功或失败后会自动发送飞书通知（含 Release 链接和 commit hash）。
-
-不配置此 Secret 不影响构建流程。
-
----
+构建和安装细节见：`docs/RELEASE_PROCESS.md`。
 
 ## 技术栈
 
-- Kotlin + Jetpack Compose
-- MVVM 架构
-- Coil 图片加载
+- Kotlin
+- Jetpack Compose
+- MVVM
+- Coil
 - Accompanist Permissions
