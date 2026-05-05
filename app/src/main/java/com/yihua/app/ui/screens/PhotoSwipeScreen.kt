@@ -79,6 +79,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 
 private const val SwipeTriggerPx = 72f
@@ -211,6 +212,12 @@ private fun PhotoContent(
     isPartialAccess: Boolean
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    var keepReviewStageForAnimation by remember { mutableStateOf(false) }
+    var lastReviewableState by remember { mutableStateOf<PhotoUiState?>(null) }
+
+    if (state.screenState == PhotoListState.Reviewable) {
+        lastReviewableState = state
+    }
 
     Column(
         modifier = Modifier
@@ -226,36 +233,81 @@ private fun PhotoContent(
             }
 
             PhotoListState.EmptyLibrary -> EmptyLibraryState()
-            PhotoListState.AllQueuedForDelete -> AllQueuedForDeleteState(
+
+            PhotoListState.Reviewable -> ReviewablePhotoContent(
+                state = state,
                 deleteQueueSize = state.deleteQueue.size,
-                onNavigateToConfirm = onNavigateToConfirm
+                isPartialAccess = isPartialAccess,
+                onNavigateToConfirm = onNavigateToConfirm,
+                onGoToNextPhoto = viewModel::goToNextPhoto,
+                onGoToPreviousPhoto = viewModel::goToPreviousPhoto,
+                onQueueCurrentPhotoForDeletion = viewModel::queueCurrentPhotoForDeletion,
+                onRestoreLastDeletedPhoto = viewModel::restoreLastDeletedPhoto,
+                onAnimationRunningChange = { keepReviewStageForAnimation = it },
+                onThumbnailClick = viewModel::goToIndex
             )
 
-            PhotoListState.Reviewable -> {
-                if (isPartialAccess) PartialAccessBanner()
-
-                TopBar(
-                    currentPhoto = state.currentPhoto,
-                    deleteQueueSize = state.deleteQueue.size,
-                    onTrashClick = onNavigateToConfirm
-                )
-
-                SwipeStage(
-                    state = state,
-                    onGoToNextPhoto = viewModel::goToNextPhoto,
-                    onGoToPreviousPhoto = viewModel::goToPreviousPhoto,
-                    onQueueCurrentPhotoForDeletion = viewModel::queueCurrentPhotoForDeletion,
-                    onRestoreLastDeletedPhoto = viewModel::restoreLastDeletedPhoto
-                )
-
-                BottomSection(
-                    photos = state.visiblePhotos,
-                    currentIndex = state.currentIndex,
-                    onThumbnailClick = viewModel::goToIndex
-                )
+            PhotoListState.AllQueuedForDelete -> {
+                val retainedState = lastReviewableState
+                if (keepReviewStageForAnimation && retainedState != null) {
+                    ReviewablePhotoContent(
+                        state = retainedState,
+                        deleteQueueSize = state.deleteQueue.size,
+                        isPartialAccess = isPartialAccess,
+                        onNavigateToConfirm = onNavigateToConfirm,
+                        onGoToNextPhoto = viewModel::goToNextPhoto,
+                        onGoToPreviousPhoto = viewModel::goToPreviousPhoto,
+                        onQueueCurrentPhotoForDeletion = viewModel::queueCurrentPhotoForDeletion,
+                        onRestoreLastDeletedPhoto = viewModel::restoreLastDeletedPhoto,
+                        onAnimationRunningChange = { keepReviewStageForAnimation = it },
+                        onThumbnailClick = viewModel::goToIndex
+                    )
+                } else {
+                    AllQueuedForDeleteState(
+                        deleteQueueSize = state.deleteQueue.size,
+                        onNavigateToConfirm = onNavigateToConfirm
+                    )
+                }
             }
         }
     }
+}
+
+@Composable
+private fun ColumnScope.ReviewablePhotoContent(
+    state: PhotoUiState,
+    deleteQueueSize: Int,
+    isPartialAccess: Boolean,
+    onNavigateToConfirm: () -> Unit,
+    onGoToNextPhoto: () -> Unit,
+    onGoToPreviousPhoto: () -> Unit,
+    onQueueCurrentPhotoForDeletion: () -> Unit,
+    onRestoreLastDeletedPhoto: () -> Boolean,
+    onAnimationRunningChange: (Boolean) -> Unit,
+    onThumbnailClick: (Int) -> Unit
+) {
+    if (isPartialAccess) PartialAccessBanner()
+
+    TopBar(
+        currentPhoto = state.currentPhoto,
+        deleteQueueSize = deleteQueueSize,
+        onTrashClick = onNavigateToConfirm
+    )
+
+    SwipeStage(
+        state = state,
+        onGoToNextPhoto = onGoToNextPhoto,
+        onGoToPreviousPhoto = onGoToPreviousPhoto,
+        onQueueCurrentPhotoForDeletion = onQueueCurrentPhotoForDeletion,
+        onRestoreLastDeletedPhoto = onRestoreLastDeletedPhoto,
+        onAnimationRunningChange = onAnimationRunningChange
+    )
+
+    BottomSection(
+        photos = state.visiblePhotos,
+        currentIndex = state.currentIndex,
+        onThumbnailClick = onThumbnailClick
+    )
 }
 
 @Composable
@@ -335,7 +387,8 @@ private fun ColumnScope.SwipeStage(
     onGoToNextPhoto: () -> Unit,
     onGoToPreviousPhoto: () -> Unit,
     onQueueCurrentPhotoForDeletion: () -> Unit,
-    onRestoreLastDeletedPhoto: () -> Boolean
+    onRestoreLastDeletedPhoto: () -> Boolean,
+    onAnimationRunningChange: (Boolean) -> Unit
 ) {
     val scope = rememberCoroutineScope()
     val progress = remember { Animatable(0f) }
@@ -351,11 +404,21 @@ private fun ColumnScope.SwipeStage(
     var animatedCard by remember { mutableStateOf<AnimatedCard?>(null) }
     var basePhotoDuringCoverIn by remember { mutableStateOf<Photo?>(null) }
 
+    fun setAnimationRunning(value: Boolean) {
+        animationRunning = value
+        onAnimationRunningChange(value)
+    }
+
     fun resetGesture() {
         dragX = 0f
         dragY = 0f
         gestureDirection = null
         gestureHandled = false
+    }
+
+    fun resetAnimationState() {
+        animatedCard = null
+        basePhotoDuringCoverIn = null
     }
 
     fun lockDirection(totalX: Float, totalY: Float): GestureDirection? {
@@ -375,27 +438,35 @@ private fun ColumnScope.SwipeStage(
         val fromX = dragX
         val fromY = dragY
         scope.launch {
-            animationRunning = true
-            val x = Animatable(fromX)
-            val y = Animatable(fromY)
-            launch {
-                x.animateTo(
-                    targetValue = 0f,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMediumLow
-                    )
-                ) { dragX = value }
+            setAnimationRunning(true)
+            try {
+                val x = Animatable(fromX)
+                val y = Animatable(fromY)
+                val xJob = launch {
+                    x.animateTo(
+                        targetValue = 0f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        )
+                    ) { dragX = value }
+                }
+                val yJob = launch {
+                    y.animateTo(
+                        targetValue = 0f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        )
+                    ) { dragY = value }
+                }
+                joinAll(xJob, yJob)
+            } finally {
+                resetGesture()
+                resetAnimationState()
+                progress.snapTo(0f)
+                setAnimationRunning(false)
             }
-            y.animateTo(
-                targetValue = 0f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMediumLow
-                )
-            ) { dragY = value }
-            resetGesture()
-            animationRunning = false
         }
     }
 
@@ -407,28 +478,31 @@ private fun ColumnScope.SwipeStage(
         updateState: () -> Unit
     ) {
         scope.launch {
-            animationRunning = true
+            setAnimationRunning(true)
             gestureHandled = true
-            progress.snapTo(0f)
-            animatedCard = AnimatedCard(
-                photo = photo,
-                motion = motion,
-                startX = startX,
-                startY = startY
-            )
-            updateState()
-            resetGesture()
-            progress.animateTo(
-                targetValue = 1f,
-                animationSpec = tween(
-                    durationMillis = 150,
-                    easing = FastOutLinearInEasing
+            try {
+                progress.snapTo(0f)
+                animatedCard = AnimatedCard(
+                    photo = photo,
+                    motion = motion,
+                    startX = startX,
+                    startY = startY
                 )
-            )
-            animatedCard = null
-            basePhotoDuringCoverIn = null
-            progress.snapTo(0f)
-            animationRunning = false
+                updateState()
+                resetGesture()
+                progress.animateTo(
+                    targetValue = 1f,
+                    animationSpec = tween(
+                        durationMillis = 150,
+                        easing = FastOutLinearInEasing
+                    )
+                )
+            } finally {
+                resetGesture()
+                resetAnimationState()
+                progress.snapTo(0f)
+                setAnimationRunning(false)
+            }
         }
     }
 
@@ -439,34 +513,36 @@ private fun ColumnScope.SwipeStage(
         updateState: () -> Boolean
     ) {
         scope.launch {
-            animationRunning = true
+            setAnimationRunning(true)
             gestureHandled = true
-            progress.snapTo(0f)
-            basePhotoDuringCoverIn = currentPhoto
-            animatedCard = AnimatedCard(photo = incomingPhoto, motion = motion)
-            val updated = updateState()
-            if (updated) {
-                resetGesture()
-                progress.animateTo(
-                    targetValue = 1f,
-                    animationSpec = tween(
-                        durationMillis = 200,
-                        easing = LinearOutSlowInEasing
+            try {
+                progress.snapTo(0f)
+                basePhotoDuringCoverIn = currentPhoto
+                animatedCard = AnimatedCard(photo = incomingPhoto, motion = motion)
+                val updated = updateState()
+                if (updated) {
+                    resetGesture()
+                    progress.animateTo(
+                        targetValue = 1f,
+                        animationSpec = tween(
+                            durationMillis = 200,
+                            easing = LinearOutSlowInEasing
+                        )
                     )
-                )
+                }
+            } finally {
+                resetGesture()
+                resetAnimationState()
+                progress.snapTo(0f)
+                setAnimationRunning(false)
             }
-            animatedCard = null
-            basePhotoDuringCoverIn = null
-            progress.snapTo(0f)
-            animationRunning = false
         }
     }
 
     LaunchedEffect(state.currentPhoto?.id) {
         if (!animationRunning) {
             resetGesture()
-            animatedCard = null
-            basePhotoDuringCoverIn = null
+            resetAnimationState()
             progress.snapTo(0f)
         }
     }
