@@ -84,6 +84,37 @@ fun DeleteConfirmScreen(
     var partialFailureMessage by remember { mutableStateOf("") }
     var completeDeleteOnSystemResult by remember { mutableStateOf(false) }
 
+    fun handleTerminalDeleteResult(result: DeleteResult) {
+        when (result) {
+            DeleteResult.EmptyQueue -> dialogState = DeleteDialogState.EmptyQueue
+            is DeleteResult.RequiresUserConfirmation -> dialogState = DeleteDialogState.RequestFailed
+            is DeleteResult.Success -> onNavigateBack()
+            is DeleteResult.PartialFailure -> {
+                partialFailureMessage = "已删除 ${result.deletedCount} 张，${result.failedCount} 张删除失败，失败照片仍保留在待删除队列。"
+                dialogState = DeleteDialogState.PartialFailure
+            }
+            is DeleteResult.Failure -> dialogState = DeleteDialogState.DeleteFailed
+        }
+    }
+
+    val deleteLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            if (completeDeleteOnSystemResult) {
+                completeDeleteOnSystemResult = false
+                viewModel.onDeleteCompleted()
+                onNavigateBack()
+            } else {
+                completeDeleteOnSystemResult = false
+                handleTerminalDeleteResult(viewModel.requestDeleteQueuedPhotos())
+            }
+        } else {
+            completeDeleteOnSystemResult = false
+            dialogState = DeleteDialogState.Cancelled
+        }
+    }
+
     fun handleDeleteResult(result: DeleteResult) {
         when (result) {
             DeleteResult.EmptyQueue -> dialogState = DeleteDialogState.EmptyQueue
@@ -104,24 +135,6 @@ fun DeleteConfirmScreen(
                 dialogState = DeleteDialogState.PartialFailure
             }
             is DeleteResult.Failure -> dialogState = DeleteDialogState.DeleteFailed
-        }
-    }
-
-    val deleteLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartIntentSenderForResult()
-    ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            if (completeDeleteOnSystemResult) {
-                viewModel.onDeleteCompleted()
-                completeDeleteOnSystemResult = false
-                onNavigateBack()
-            } else {
-                completeDeleteOnSystemResult = false
-                handleDeleteResult(viewModel.requestDeleteQueuedPhotos())
-            }
-        } else {
-            completeDeleteOnSystemResult = false
-            dialogState = DeleteDialogState.Cancelled
         }
     }
 
