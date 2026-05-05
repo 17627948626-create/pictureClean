@@ -1,10 +1,12 @@
 # Release 上架门禁审查清单
 
-本文档以“能否稳定上架并通过审核”为唯一评判标准，统一记录当前项目的发布阻断项、修复方案、验收标准和注意事项。
+本文档是项目唯一的 P0 上架门禁来源。README 只保留摘要和链接，不再维护另一套 P0 判断口径。
+
+本文档以“能否稳定上架并通过审核”为唯一评判标准，记录发布阻断项、当前状态、修复方案、验收标准和注意事项。
 
 ## P0 口径说明
 
-P0 不只包含“Google Play 一定拒审”的材料问题，也包含以下会导致不能放心上架的问题：
+P0 不只包含“Google Play 一定拒审”的材料问题，也包含以下不能放心上架的问题：
 
 - 核心路径不可用。
 - 用户照片存在误删、错删、假删除风险。
@@ -12,20 +14,28 @@ P0 不只包含“Google Play 一定拒审”的材料问题，也包含以下�
 - Release 包没有经过真实验证。
 - 边界场景会崩溃或状态错乱。
 
-因此本文档中的 P0 是“上架门禁 P0”，所有 P0 必须关闭后才建议提交商店审核。
+所有 P0 必须关闭后，才建议提交商店审核。
+
+## 状态定义
+
+| 状态 | 含义 |
+| --- | --- |
+| 未关闭 | 代码、材料、验证任一关键部分缺失 |
+| 已修复待验证 | 代码或材料已完成，但缺少真机、Release 或 Play Console 验证 |
+| 已关闭 | 代码或材料完成，并已有测试、真机或发布后台验证记录 |
 
 ## 当前优先级总览
 
 | 优先级 | 数量 | 定义 | 发布建议 |
 | --- | ---: | --- | --- |
 | P0 | 8 | 阻止上架、核心功能不可用、数据安全或审核必需项 | 必须全部关闭 |
-| P1 | 3 | 上架前强烈建议修复，否则发布后高概率出问题 | 建议随 P0 同步修 |
+| P1 | 1 | 上架前强烈建议修复，否则发布后高概率增加维护成本 | 建议随 P0 同步修 |
 | P2 | 4 | 质量、体验、测试和可维护性问题 | 上架前尽量修 |
 | P3 | 2 | 后续迭代优化 | 可排期 |
 
 ## 当前发布判断
 
-当前版本不能只按“P0-1 代码修复 + P0-2 文档补齐”判断可上架。必须逐项确认下列 8 个 P0：
+当前不能只按“加载失败兜底已修 + 仓库内有隐私政策文档”判断可上架。必须逐项确认 8 个 P0：
 
 1. 照片加载失败不能永久 Loading。
 2. 隐私政策和权限说明满足 Google Play 要求。
@@ -33,14 +43,16 @@ P0 不只包含“Google Play 一定拒审”的材料问题，也包含以下�
 4. 快速连续手势不会导致状态错乱。
 5. 权限请求、拒绝、部分授权、恢复授权流程完整。
 6. 空相册、单张照片、最后一张删除等边界场景稳定。
-7. Release 包完成构建和真机回归。
-8. 删除行为真实、安全、可解释。
+7. 删除行为真实、安全、可解释。
+8. Release 包完成构建和真机回归。
 
 ---
 
 # P0 — 上架门禁
 
 ## P0-1：照片加载失败不能永久 Loading
+
+**当前状态**：已修复待验证
 
 **位置**：`PhotoViewModel.kt`、照片加载 UI。
 
@@ -84,6 +96,8 @@ P0 不只包含“Google Play 一定拒审”的材料问题，也包含以下�
 
 ## P0-2：隐私政策和权限说明满足 Google Play 要求
 
+**当前状态**：已修复待验证
+
 **位置**：`docs/PRIVACY_POLICY.md`、Google Play Console、商店详情页、权限用途说明。
 
 **风险**：
@@ -102,12 +116,7 @@ P0 不只包含“Google Play 一定拒审”的材料问题，也包含以下�
 - 保留并维护 `docs/PRIVACY_POLICY.md`。
 - 将隐私政策发布到公网 URL，例如 GitHub Pages、官网、公开 Notion 页面或其他稳定地址。
 - 在 Google Play Console 的隐私政策字段填写该 URL。
-- 在 Data safety / 数据安全表单中如实声明：
-  - 是否收集照片。
-  - 是否上传照片。
-  - 是否共享数据。
-  - 是否使用第三方 SDK。
-  - 是否有广告、分析、云端处理。
+- 在 Data safety / 数据安全表单中如实声明：是否收集照片、是否上传照片、是否共享数据、是否使用第三方 SDK、是否有广告、分析或云端处理。
 - App 内权限说明必须明确照片权限用途。
 
 **验收标准**：
@@ -128,6 +137,8 @@ P0 不只包含“Google Play 一定拒审”的材料问题，也包含以下�
 
 ## P0-3：删除 / 恢复状态机可靠
 
+**当前状态**：已修复待验证
+
 **位置**：`PhotoViewModel.kt`、删除队列、恢复逻辑、确认删除页。
 
 **风险**：
@@ -140,24 +151,16 @@ P0 不只包含“Google Play 一定拒审”的材料问题，也包含以下�
 
 **修复方案**：
 
-- 明确唯一数据源：
-  - `allPhotos`：当前 App 认为存在的照片全集。
-  - `deleteQueue`：待系统删除确认的照片。
-  - `deleteQueueIds`：由 `deleteQueue` 派生。
-  - `visiblePhotos`：`allPhotos - deleteQueueIds` 派生。
-  - `currentIndex`：始终 clamp 到 `visiblePhotos` 合法范围。
+- 明确唯一数据源：`allPhotos`、`deleteQueue`、`deleteQueueIds`、`visiblePhotos`、`currentIndex`。
+- `deleteQueueIds` 只能由 `deleteQueue` 派生。
+- `visiblePhotos` 只能由 `allPhotos - deleteQueueIds` 派生。
+- `currentIndex` 始终 clamp 到 `visiblePhotos` 合法范围。
 - 上划接受后立即调用 `queueCurrentPhotoForDeletion()`。
-- 下划恢复只允许恢复最近一次删除，并且必须校验恢复位置。
+- 下划恢复只允许恢复最近一次删除，并校验恢复位置。
 - 删除完成后只移除 `deleteQueueIds` 对应照片。
 - 删除取消或失败时不能清空队列。
-- `recomputeDerivedState()` 必须作为状态归一化入口。
-- 增加状态机 contract tests：
-  - 删除当前照片。
-  - 删除最后一张。
-  - 连续删除多张。
-  - 恢复最近删除。
-  - 非恢复位置下滑不能恢复。
-  - 确认删除后清队列并移除照片。
+- `recomputeDerivedState()` 作为状态归一化入口。
+- 增加状态机 contract tests：删除当前照片、删除最后一张、连续删除、恢复最近删除、非恢复位置不能恢复、确认删除后清队列并移除照片。
 
 **验收标准**：
 
@@ -179,6 +182,8 @@ P0 不只包含“Google Play 一定拒审”的材料问题，也包含以下�
 ---
 
 ## P0-4：快速连续手势不会导致状态错乱
+
+**当前状态**：已修复待验证
 
 **位置**：`PhotoSwipeScreen.kt`、`SwipeStage`、手势锁、动画状态。
 
@@ -219,6 +224,8 @@ P0 不只包含“Google Play 一定拒审”的材料问题，也包含以下�
 ---
 
 ## P0-5：权限请求、拒绝、部分授权、恢复授权流程完整
+
+**当前状态**：未关闭
 
 **位置**：权限请求 UI、`AndroidManifest.xml`、Accompanist Permissions、照片加载入口。
 
@@ -261,6 +268,8 @@ P0 不只包含“Google Play 一定拒审”的材料问题，也包含以下�
 
 ## P0-6：空相册、单张照片、最后一张删除等边界场景稳定
 
+**当前状态**：已修复待验证
+
 **位置**：`PhotoViewModel.kt`、主界面、删除动画、空状态 UI。
 
 **风险**：
@@ -273,12 +282,7 @@ P0 不只包含“Google Play 一定拒审”的材料问题，也包含以下�
 
 **修复方案**：
 
-- 保留状态区分：
-  - `Loading`
-  - `LoadFailed`
-  - `EmptyLibrary`
-  - `AllQueuedForDelete`
-  - `Reviewable`
+- 保留状态区分：`Loading`、`LoadFailed`、`EmptyLibrary`、`AllQueuedForDelete`、`Reviewable`。
 - `currentIndex` 每次派生状态后都 clamp。
 - `currentPhoto` 始终使用 `getOrNull()`。
 - 空相册展示空状态，不进入 swipe stage。
@@ -303,53 +307,9 @@ P0 不只包含“Google Play 一定拒审”的材料问题，也包含以下�
 
 ---
 
-## P0-7：Release 包完成构建和真机回归
+## P0-7：删除行为真实、安全、可解释
 
-**位置**：Gradle、GitHub Actions、签名配置、Release APK/AAB、真机测试记录。
-
-**风险**：
-
-Debug 包可用不代表 Release 可上架。混淆、资源压缩、签名、权限声明、targetSdk、构建产物、系统删除弹窗都可能在 Release 下暴露问题。
-
-**当前目标**：
-
-上架前必须验证 Release 构建产物，而不是只验证 Debug。
-
-**修复方案**：
-
-- 本地或 GitHub Actions 构建 Release APK/AAB。
-- 配置正式签名。
-- 检查 `versionCode`、`versionName`、`applicationId`、`targetSdk`、`minSdk`。
-- 执行：
-  - `./gradlew :app:testDebugUnitTest --no-daemon`
-  - `./gradlew :app:lintDebug --no-daemon`
-  - `./gradlew :app:assembleRelease --no-daemon` 或对应 AAB 构建命令。
-- 在真机安装 Release 包回归核心路径。
-- 清理 debug 日志、测试入口、测试数据、未使用权限。
-- 保存一份 release 回归记录。
-
-**验收标准**：
-
-- Release APK/AAB 构建成功。
-- Release 包可安装、可启动。
-- 首次权限流程正常。
-- 照片加载正常。
-- 左右滑、上划删除、下划恢复正常。
-- 删除确认页正常。
-- 系统删除弹窗正常。
-- 删除完成后 App 状态正确。
-- Play Console 预检查没有阻断项。
-
-**注意事项**：
-
-- 不要用 Debug 包结论替代 Release 包结论。
-- 不要在 release 中依赖 debug-only 权限、日志或 mock 数据。
-- 如果启用混淆，需要确认 Compose、Coil、权限库、MediaStore 路径没有被破坏。
-- GitHub Actions 产物必须与准备上架的包一致。
-
----
-
-## P0-8：删除行为真实、安全、可解释
+**当前状态**：未关闭
 
 **位置**：`deleteDirectly()`、`createDeleteRequest()`、删除确认页、删除完成回调。
 
@@ -366,21 +326,7 @@ Debug 包可用不代表 Release 可上架。混淆、资源压缩、签名、�
 - API 30+ 使用 `MediaStore.createDeleteRequest()`，由系统弹窗确认。
 - API 29 单独处理 `RecoverableSecurityException`，拿到 recoverable intent 后交给 UI 发起授权。
 - API 28 及以下如继续直接删除，必须明确成功/失败结果。
-- 删除结果不要只用 Boolean 表达，建议引入结果对象：
-
-```kotlin
-sealed class DeleteResult {
-    data object Success : DeleteResult()
-    data class RequiresUserAction(val intentSender: IntentSender) : DeleteResult()
-    data class PartialFailure(
-        val deleted: List<Photo>,
-        val failed: List<Photo>,
-        val reason: Throwable?
-    ) : DeleteResult()
-    data class Failure(val reason: Throwable?) : DeleteResult()
-}
-```
-
+- 删除结果不要只用 Boolean 表达，建议引入结构化结果对象：`Success`、`RequiresUserAction`、`PartialFailure`、`Failure`。
 - 删除成功后调用 `onDeleteCompleted()`。
 - 删除取消或失败时保留 `deleteQueue`。
 - UI 必须说明：删除会通过系统流程处理，可能进入系统回收站或由系统决定最终删除行为。
@@ -405,19 +351,58 @@ sealed class DeleteResult {
 
 ---
 
+## P0-8：Release 包完成构建和真机回归
+
+**当前状态**：未关闭
+
+**位置**：Gradle、GitHub Actions、签名配置、Release APK/AAB、真机测试记录。
+
+**风险**：
+
+Debug 包可用不代表 Release 可上架。混淆、资源压缩、签名、权限声明、targetSdk、构建产物、系统删除弹窗都可能在 Release 下暴露问题。
+
+**当前目标**：
+
+上架前必须验证 Release 构建产物，而不是只验证 Debug。
+
+**修复方案**：
+
+- 本地或 GitHub Actions 构建 Release APK/AAB。
+- 配置正式签名。
+- 检查 `versionCode`、`versionName`、`applicationId`、`targetSdk`、`minSdk`。
+- 执行：`./gradlew :app:testDebugUnitTest --no-daemon`、`./gradlew :app:lintDebug --no-daemon`、`./gradlew :app:assembleRelease --no-daemon` 或对应 AAB 构建命令。
+- 在真机安装 Release 包回归核心路径。
+- 清理 debug 日志、测试入口、测试数据、未使用权限。
+- 保存一份 Release 回归记录。
+
+**验收标准**：
+
+- Release APK/AAB 构建成功。
+- Release 包可安装、可启动。
+- 首次权限流程正常。
+- 照片加载正常。
+- 左右滑、上划删除、下划恢复正常。
+- 删除确认页正常。
+- 系统删除弹窗正常。
+- 删除完成后 App 状态正确。
+- Play Console 预检查没有阻断项。
+
+**注意事项**：
+
+- 不要用 Debug 包结论替代 Release 包结论。
+- 不要在 release 中依赖 debug-only 权限、日志或 mock 数据。
+- 如果启用混淆，需要确认 Compose、Coil、权限库、MediaStore 路径没有被破坏。
+- GitHub Actions 产物必须与准备上架的包一致。
+
+---
+
 # P1 — 上架前强烈建议修复
 
-## P1-1：Android 10 删除路径专项兼容
+## P1-1：权限和隐私文案资源化
 
-该问题已被 P0-8 覆盖为上架门禁的一部分。若单独跟踪，重点是 API 29 + targetSdk 35 下 `RecoverableSecurityException` 的处理。
+**方案**：权限说明、错误提示、删除确认文案进入 `strings.xml`，Compose 中使用 `stringResource()`。
 
-## P1-2：批量删除结果语义明确化
-
-该问题已被 P0-8 覆盖为上架门禁的一部分。建议用结构化 `DeleteResult` 替代 Boolean。
-
-## P1-3：权限和隐私文案资源化
-
-权限说明、错误提示、删除确认文案应进入 `strings.xml`，避免后续修改遗漏。
+**注意事项**：权限、隐私、删除确认文案属于审核敏感文案，应优先资源化。Android 10 删除路径和批量删除结果语义已并入 P0-7，不再作为 P1 重复跟踪。
 
 ---
 
@@ -433,7 +418,7 @@ sealed class DeleteResult {
 
 **方案**：用户可见字符串迁移到 `res/values/strings.xml`，Compose 中使用 `stringResource()`。
 
-**注意事项**：权限、隐私、删除确认文案属于审核敏感文案，应优先资源化。
+**注意事项**：优先处理权限、隐私、删除确认、错误提示文案。
 
 ## P2-3：删除路径测试覆盖不足
 
@@ -461,9 +446,9 @@ sealed class DeleteResult {
 
 ---
 
-# 建议修复顺序
+# 建议执行顺序
 
-## 第一批：上架门禁
+## 第一批：业务和审核门禁
 
 1. P0-1 加载失败兜底。
 2. P0-2 隐私政策公网 URL 和 Play Console 填写。
@@ -471,17 +456,21 @@ sealed class DeleteResult {
 4. P0-4 快速连续手势锁。
 5. P0-5 权限完整流程。
 6. P0-6 边界场景。
-7. P0-8 删除行为安全。
-8. P0-7 Release 包构建与真机回归。
+7. P0-7 删除行为安全。
 
-## 第二批：发布前 hardening
+## 第二批：最终发布门禁
 
-1. 删除结果对象化。
-2. API 29 删除授权路径专项测试。
-3. 权限和删除文案资源化。
-4. `allowBackup` 关闭或配置 backup rules。
+1. P0-8 Release 包构建与真机回归。
+2. Play Console 预检查。
+3. 记录最终验收结果。
 
-## 第三批：体验和维护优化
+## 第三批：发布前 hardening
+
+1. 权限和删除文案资源化。
+2. `allowBackup` 关闭或配置 backup rules。
+3. 删除路径测试补强。
+
+## 第四批：体验和维护优化
 
 1. 边界阻尼。
 2. Coil 缓存策略。
