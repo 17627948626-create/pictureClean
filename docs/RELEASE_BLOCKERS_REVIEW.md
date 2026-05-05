@@ -175,11 +175,13 @@
 
 ## P1-1：权限和隐私文案资源化
 
-**当前状态**：已修复待验证
+**当前状态**：已关闭
 
 **问题**：权限说明、错误提示、删除确认文案仍存在硬编码风险，审核敏感文案后续修改容易遗漏。
 
 **已完成**：权限、隐私提示、加载失败、删除确认、删除结果提示等用户可见文案已迁移到 `res/values/strings.xml`，Compose 使用 `stringResource()`，ViewModel 和 Repository 通过资源读取用户可见兜底文案。
+
+**验证记录**：GitHub Actions Build APK #95 已通过 unit test、Android Lint、Debug APK 构建、Release APK 构建和 GitHub Release 发布。
 
 **注意**：Android 10 删除路径和批量删除语义已并入 P0-7，不再作为 P1 重复跟踪。
 
@@ -189,35 +191,45 @@
 
 ## P2-1：`allowBackup="true"` 存在轻微隐私风险
 
-**当前状态**：已修复待验证
+**当前状态**：已关闭
 
 **已完成**：`AndroidManifest.xml` 中 `android:allowBackup` 已改为 `false`。
 
+**验证记录**：GitHub Actions Build APK #95 已通过 unit test、Android Lint、Debug APK 构建、Release APK 构建和 GitHub Release 发布。
+
 ## P2-2：普通用户可见字符串硬编码
 
-**当前状态**：已修复待验证
+**当前状态**：已关闭
 
 **已完成**：普通用户可见主流程文案已同步迁移到 `strings.xml`。
 
+**验证记录**：GitHub Actions Build APK #95 已通过 unit test、Android Lint、Debug APK 构建、Release APK 构建和 GitHub Release 发布。
+
 ## P2-3：删除路径测试覆盖不足
 
-**当前状态**：已修复待验证
+**当前状态**：已关闭
 
 **已完成**：补充删除路径 contract test，覆盖 API 30+ 系统确认分支、直接删除失败保留队列、部分成功仅移除已删除照片并保留失败照片。
+
+**验证记录**：GitHub Actions Build APK #95 已通过 unit test、Android Lint、Debug APK 构建、Release APK 构建和 GitHub Release 发布。
 
 **依赖**：优先等 P0-7 删除结果模型稳定后再补完整测试，避免测试锁死旧设计。
 
 ## P2-4：缩略图 / 边界手感优化
 
-**当前状态**：已修复待验证
+**当前状态**：已关闭
 
 **已完成**：第一张右划和最后一张左划加入边界阻尼，松手回弹，不触发业务状态迁移。
 
+**验证记录**：GitHub Actions Build APK #95 已通过 unit test、Android Lint、Debug APK 构建、Release APK 构建和 GitHub Release 发布。
+
 ## P2-5：上划松手飞出过渡略不连续
 
-**当前状态**：已修复待验证
+**当前状态**：已关闭
 
 **已完成**：上划飞出动画继承拖动预览缩放和位移作为起点，业务仍在上划接受后立即入队。
+
+**验证记录**：GitHub Actions Build APK #95 已通过 unit test、Android Lint、Debug APK 构建、Release APK 构建和 GitHub Release 发布。
 
 ---
 
@@ -225,15 +237,19 @@
 
 ## P3-1：Coil 缓存和解码策略
 
-**当前状态**：已修复待验证
+**当前状态**：已关闭
 
 **已完成**：照片卡片、缩略图和删除确认缩略图使用明确尺寸的 Coil `ImageRequest`，配置稳定 memory/disk cache key、硬件解码和 inexact precision。
 
+**验证记录**：GitHub Actions Build APK #95 已通过 unit test、Android Lint、Debug APK 构建、Release APK 构建和 GitHub Release 发布。
+
 ## P3-2：测试文件命名一致性
 
-**当前状态**：已修复待验证
+**当前状态**：已关闭
 
 **已完成**：`DeleteQueueContractTest` 文件名和类名已统一。
+
+**验证记录**：GitHub Actions Build APK #95 已通过 unit test、Android Lint、Debug APK 构建、Release APK 构建和 GitHub Release 发布。
 
 ---
 
