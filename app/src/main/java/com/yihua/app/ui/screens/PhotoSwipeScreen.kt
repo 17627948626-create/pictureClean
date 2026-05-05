@@ -46,6 +46,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -408,6 +409,7 @@ private fun ColumnScope.SwipeStage(
             .fillMaxWidth()
             .weight(1f)
             .padding(horizontal = 16.dp, vertical = 8.dp)
+            .clipToBounds()
             .onSizeChanged {
                 stageWidth = it.width.toFloat()
                 stageHeight = it.height.toFloat()
@@ -537,32 +539,25 @@ private fun ColumnScope.SwipeStage(
                             val isCurrent = offset == 0
                             val clampedY = dragY.coerceIn(-240f, 0f)
                             val deleteProgress = if (isCurrent) (-clampedY / 220f).coerceIn(0f, 1f) else 0f
-                            val enterScale = when {
-                                isCurrent && entryMotion == EntryMotion.FromTop -> 0.82f + entryProgress * 0.18f
-                                isCurrent -> 0.98f + entryProgress * 0.02f
-                                else -> 1f
-                            }
+                            // 恢复：从上方落入，0.5→1.0 放大；其余情况无缩放
+                            val enterScale = if (isCurrent && entryMotion == EntryMotion.FromTop) {
+                                0.5f + entryProgress * 0.5f
+                            } else 1f
                             val dragScale = if (isCurrent) 1f - deleteProgress * 0.16f else 1f
+                            // 删除后：下一张从右侧整屏宽滑入
                             val entryX = if (isCurrent && entryMotion == EntryMotion.FromRight) {
-                                (1f - entryProgress) * pageStep * 0.28f
+                                (1f - entryProgress) * pageStep
                             } else 0f
-                            val entryY = when {
-                                isCurrent && entryMotion == EntryMotion.FromTop -> -(1f - entryProgress) * stageHeight * 0.85f
-                                isCurrent && entryMotion != EntryMotion.None -> (1f - entryProgress) * 10f
-                                else -> 0f
-                            }
-                            val entryAlpha = when {
-                                isCurrent && entryMotion == EntryMotion.FromTop -> entryProgress
-                                isCurrent -> 0.78f + entryProgress * 0.22f
-                                else -> 1f
-                            }
+                            // 恢复：误删照片从屏幕上方落下
+                            val entryY = if (isCurrent && entryMotion == EntryMotion.FromTop) {
+                                -(1f - entryProgress) * stageHeight
+                            } else 0f
 
                             translationX = baseX + entryX
                             translationY = if (isCurrent) clampedY + entryY else 0f
-                            rotationZ = 0f
                             scaleX = enterScale * dragScale
                             scaleY = enterScale * dragScale
-                            alpha = if (isCurrent) entryAlpha * (1f - deleteProgress * 0.32f) else 1f
+                            alpha = if (isCurrent) 1f - deleteProgress * 0.32f else 1f
                         }
                 )
             }
@@ -576,19 +571,16 @@ private fun ColumnScope.SwipeStage(
                     .graphicsLayer {
                         when (overlayMotion) {
                             OverlayMotion.DeleteUp -> {
-                                val flyDistance = (stageHeight.takeIf { it > 0f } ?: size.height) * 0.85f
+                                // 向上飞出，缩小到 0.5x，不淡出
+                                val flyDistance = stageHeight.takeIf { it > 0f } ?: size.height
                                 translationY = -overlayProgress * flyDistance
-                                scaleX = 1f - overlayProgress * 0.18f
-                                scaleY = 1f - overlayProgress * 0.18f
-                                alpha = 1f - overlayProgress
+                                scaleX = 1f - overlayProgress * 0.5f
+                                scaleY = 1f - overlayProgress * 0.5f
                             }
                             OverlayMotion.RestoreMoveRight -> {
-                                val moveDistance = (stageWidth.takeIf { it > 0f } ?: size.width) * 0.85f
+                                // 向右退出，仅移动，不缩放不淡出
+                                val moveDistance = stageWidth.takeIf { it > 0f } ?: size.width
                                 translationX = overlayProgress * moveDistance
-                                rotationZ = 0f
-                                scaleX = 1f - overlayProgress * 0.18f
-                                scaleY = 1f - overlayProgress * 0.18f
-                                alpha = 1f - overlayProgress
                             }
                             null -> Unit
                         }
