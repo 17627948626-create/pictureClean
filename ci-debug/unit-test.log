@@ -1,0 +1,72 @@
+
+Welcome to Gradle 8.6!
+
+Here are the highlights of this release:
+ - Configurable encryption key for configuration cache
+ - Build init improvements
+ - Build authoring improvements
+
+For more details see https://docs.gradle.org/8.6/release-notes.html
+
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.6/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+Calculating task graph as no cached configuration is available for tasks: :app:testDebugUnitTest
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:checkKotlinGradlePluginConfigurationErrors
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+> Task :app:generateDebugResValues
+> Task :app:javaPreCompileDebugUnitTest
+> Task :app:javaPreCompileDebug
+> Task :app:extractDeepLinksDebug
+> Task :app:generateDebugResources
+> Task :app:mapDebugSourceSetPaths
+> Task :app:checkDebugAarMetadata
+> Task :app:mergeDebugShaders
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:packageDebugResources
+> Task :app:mergeDebugAssets
+> Task :app:processDebugMainManifest
+> Task :app:parseDebugLocalResources
+> Task :app:processDebugManifest
+> Task :app:processDebugManifestForPackage
+> Task :app:mergeDebugResources
+> Task :app:processDebugResources
+> Task :app:packageDebugUnitTestForUnitTest
+> Task :app:generateDebugUnitTestConfig
+
+> Task :app:compileDebugKotlin
+w: file:///home/runner/work/pictureClean/pictureClean/app/src/main/java/com/yihua/app/ui/theme/Theme.kt:49:20 'setter for statusBarColor: Int' is deprecated. Deprecated in Java
+
+> Task :app:compileDebugJavaWithJavac NO-SOURCE
+> Task :app:processDebugJavaRes
+> Task :app:bundleDebugClassesToRuntimeJar
+> Task :app:bundleDebugClassesToCompileJar
+> Task :app:compileDebugUnitTestKotlin
+> Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :app:processDebugUnitTestJavaRes
+
+> Task :app:testDebugUnitTest
+
+com.yihua.app.viewmodel.DeletePathContractTest > initializationError FAILED
+    java.lang.IllegalArgumentException at RobolectricTestRunner.java:216
+        Caused by: java.lang.IllegalArgumentException at DefaultSdkPicker.java:118
+
+24 tests completed, 1 failed
+
+> Task :app:testDebugUnitTest FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:testDebugUnitTest'.
+> There were failing tests. See the report at: file:///home/runner/work/pictureClean/pictureClean/app/build/reports/tests/testDebugUnitTest/index.html
+
+* Try:
+> Run with --scan to get full insights.
+
+BUILD FAILED in 38s
+27 actionable tasks: 27 executed
+Configuration cache entry stored.
