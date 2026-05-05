@@ -244,30 +244,6 @@ class PhotoViewModel(
 
     @RequiresApi(Build.VERSION_CODES.Q)
     private fun deleteApi29QueuedPhotos(queue: List<Photo>): DeleteResult {
-        return deleteQueuedPhotosDirectly(
-            queue = queue,
-            onRecoverableSecurityException = { photo, exception, deletedIds ->
-                Log.e(TAG, "Delete needs user confirmation. uri=${photo.uri}, sdk=${Build.VERSION.SDK_INT}", exception)
-                if (deletedIds.isNotEmpty()) markPhotosDeleted(deletedIds)
-                DeleteResult.RequiresUserConfirmation(
-                    intentSender = exception.userAction.actionIntent.intentSender,
-                    completeOnResult = false
-                )
-            }
-        )
-    }
-
-    private fun deletePreQQueuedPhotos(queue: List<Photo>): DeleteResult {
-        return deleteQueuedPhotosDirectly(
-            queue = queue,
-            onRecoverableSecurityException = { _, _, _ -> DeleteResult.Failure(queue.size) }
-        )
-    }
-
-    private fun deleteQueuedPhotosDirectly(
-        queue: List<Photo>,
-        onRecoverableSecurityException: (Photo, RecoverableSecurityException, Set<Long>) -> DeleteResult
-    ): DeleteResult {
         val contentResolver = getApplication<Application>().contentResolver
         val deletedIds = mutableSetOf<Long>()
         val failedIds = mutableSetOf<Long>()
@@ -282,13 +258,49 @@ class PhotoViewModel(
                     failedIds += photo.id
                 }
             } catch (e: RecoverableSecurityException) {
-                return onRecoverableSecurityException(photo, e, deletedIds)
+                Log.e(TAG, "Delete needs user confirmation. uri=${photo.uri}, sdk=${Build.VERSION.SDK_INT}", e)
+                if (deletedIds.isNotEmpty()) markPhotosDeleted(deletedIds)
+                return DeleteResult.RequiresUserConfirmation(
+                    intentSender = e.userAction.actionIntent.intentSender,
+                    completeOnResult = false
+                )
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to delete photo directly. uri=${photo.uri}, sdk=${Build.VERSION.SDK_INT}", e)
                 failedIds += photo.id
             }
         }
 
+        return finalizeDirectDeleteResult(queue, deletedIds, failedIds)
+    }
+
+    private fun deletePreQQueuedPhotos(queue: List<Photo>): DeleteResult {
+        val contentResolver = getApplication<Application>().contentResolver
+        val deletedIds = mutableSetOf<Long>()
+        val failedIds = mutableSetOf<Long>()
+
+        for (photo in queue) {
+            try {
+                val deletedRows = contentResolver.delete(photo.uri, null, null)
+                if (deletedRows > 0) {
+                    deletedIds += photo.id
+                } else {
+                    Log.e(TAG, "Direct delete affected no rows. uri=${photo.uri}, sdk=${Build.VERSION.SDK_INT}")
+                    failedIds += photo.id
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to delete photo directly. uri=${photo.uri}, sdk=${Build.VERSION.SDK_INT}", e)
+                failedIds += photo.id
+            }
+        }
+
+        return finalizeDirectDeleteResult(queue, deletedIds, failedIds)
+    }
+
+    private fun finalizeDirectDeleteResult(
+        queue: List<Photo>,
+        deletedIds: Set<Long>,
+        failedIds: Set<Long>
+    ): DeleteResult {
         return when {
             deletedIds.size == queue.size -> {
                 onDeleteCompleted()
