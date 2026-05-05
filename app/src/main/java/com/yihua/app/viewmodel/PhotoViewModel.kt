@@ -29,6 +29,12 @@ enum class PhotoListState {
     Reviewable
 }
 
+enum class DeleteStrategy {
+    SystemConfirmation,
+    Api29DirectDelete,
+    PreQDirectDelete
+}
+
 data class DeleteHistoryEntry(
     val photo: Photo,
     val previousIndex: Int
@@ -131,6 +137,12 @@ class PhotoViewModel(
                 else -> DeleteResult.Failure(state.deleteQueue.size)
             }
             return DirectDeleteOutcome(deleteResult = result, state = nextState)
+        }
+
+        internal fun deleteStrategyForSdk(sdkInt: Int): DeleteStrategy = when {
+            sdkInt >= Build.VERSION_CODES.R -> DeleteStrategy.SystemConfirmation
+            sdkInt >= Build.VERSION_CODES.Q -> DeleteStrategy.Api29DirectDelete
+            else -> DeleteStrategy.PreQDirectDelete
         }
     }
 
@@ -251,10 +263,10 @@ class PhotoViewModel(
         val queue = _uiState.value.deleteQueue
         if (queue.isEmpty()) return DeleteResult.EmptyQueue
 
-        return when {
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> requestSystemDelete(queue)
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> deleteApi29QueuedPhotos(queue)
-            else -> deletePreQQueuedPhotos(queue)
+        return when (deleteStrategyForSdk(Build.VERSION.SDK_INT)) {
+            DeleteStrategy.SystemConfirmation -> requestSystemDelete(queue)
+            DeleteStrategy.Api29DirectDelete -> deleteApi29QueuedPhotos(queue)
+            DeleteStrategy.PreQDirectDelete -> deletePreQQueuedPhotos(queue)
         }
     }
 
