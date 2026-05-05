@@ -6,7 +6,6 @@ import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import com.yihua.app.data.Photo
 import com.yihua.app.data.PhotoDataSource
-import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -48,9 +47,9 @@ class DeleteQueueContractTest {
     @Test
     fun `queueCurrentPhotoForDeletion immediately queues current photo and advances visible list`() {
         val photos = listOf(
-            Photo(1L, mockk<Uri>(), "photo_1.jpg", 1L, 1000L),
-            Photo(2L, mockk<Uri>(), "photo_2.jpg", 2L, 1000L),
-            Photo(3L, mockk<Uri>(), "photo_3.jpg", 3L, 1000L)
+            Photo(1L, Uri.parse("content://media/external/images/media/1"), "photo_1.jpg", 1L, 1000L),
+            Photo(2L, Uri.parse("content://media/external/images/media/2"), "photo_2.jpg", 2L, 1000L),
+            Photo(3L, Uri.parse("content://media/external/images/media/3"), "photo_3.jpg", 3L, 1000L)
         )
         val prefs = app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val vm = PhotoViewModel(app, QueueDeleteFakePhotoDataSource(photos), prefs)
