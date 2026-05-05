@@ -409,7 +409,6 @@ private fun ColumnScope.SwipeStage(
             .fillMaxWidth()
             .weight(1f)
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            .clipToBounds()
             .onSizeChanged {
                 stageWidth = it.width.toFloat()
                 stageHeight = it.height.toFloat()
@@ -525,41 +524,44 @@ private fun ColumnScope.SwipeStage(
         contentAlignment = Alignment.Center
     ) {
         val pageOffset = if (pageSettling) pageProgress else dragX
-        listOf(-1, 0, 1).forEach { offset ->
-            val index = state.currentIndex + offset
-            val photo = state.visiblePhotos.getOrNull(index)
-            if (photo != null) {
-                PhotoCard(
-                    photo = photo,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            val pageStep = stageWidth.takeIf { it > 0f } ?: size.width
-                            val baseX = offset * pageStep + pageOffset
-                            val isCurrent = offset == 0
-                            val clampedY = dragY.coerceIn(-240f, 0f)
-                            val deleteProgress = if (isCurrent) (-clampedY / 220f).coerceIn(0f, 1f) else 0f
-                            // 恢复：从上方落入，0.5→1.0 放大；其余情况无缩放
-                            val enterScale = if (isCurrent && entryMotion == EntryMotion.FromTop) {
-                                0.5f + entryProgress * 0.5f
-                            } else 1f
-                            val dragScale = if (isCurrent) 1f - deleteProgress * 0.16f else 1f
-                            // 删除后：下一张从右侧整屏宽滑入
-                            val entryX = if (isCurrent && entryMotion == EntryMotion.FromRight) {
-                                (1f - entryProgress) * pageStep
-                            } else 0f
-                            // 恢复：误删照片从屏幕上方落下
-                            val entryY = if (isCurrent && entryMotion == EntryMotion.FromTop) {
-                                -(1f - entryProgress) * stageHeight
-                            } else 0f
+        // 裁剪只作用于分页卡片，overlay 在外层不受裁剪，可以飞出边界
+        Box(modifier = Modifier.fillMaxSize().clipToBounds()) {
+            listOf(-1, 0, 1).forEach { offset ->
+                val index = state.currentIndex + offset
+                val photo = state.visiblePhotos.getOrNull(index)
+                if (photo != null) {
+                    PhotoCard(
+                        photo = photo,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                val pageStep = stageWidth.takeIf { it > 0f } ?: size.width
+                                val baseX = offset * pageStep + pageOffset
+                                val isCurrent = offset == 0
+                                val clampedY = dragY.coerceIn(-240f, 0f)
+                                val deleteProgress = if (isCurrent) (-clampedY / 220f).coerceIn(0f, 1f) else 0f
+                                // 恢复：从上方落入，0.5→1.0 放大；其余情况无缩放
+                                val enterScale = if (isCurrent && entryMotion == EntryMotion.FromTop) {
+                                    0.5f + entryProgress * 0.5f
+                                } else 1f
+                                val dragScale = if (isCurrent) 1f - deleteProgress * 0.16f else 1f
+                                // 删除后：下一张从右侧整屏宽滑入
+                                val entryX = if (isCurrent && entryMotion == EntryMotion.FromRight) {
+                                    (1f - entryProgress) * pageStep
+                                } else 0f
+                                // 恢复：误删照片从屏幕上方落下
+                                val entryY = if (isCurrent && entryMotion == EntryMotion.FromTop) {
+                                    -(1f - entryProgress) * stageHeight
+                                } else 0f
 
-                            translationX = baseX + entryX
-                            translationY = if (isCurrent) clampedY + entryY else 0f
-                            scaleX = enterScale * dragScale
-                            scaleY = enterScale * dragScale
-                            alpha = if (isCurrent) 1f - deleteProgress * 0.32f else 1f
-                        }
-                )
+                                translationX = baseX + entryX
+                                translationY = if (isCurrent) clampedY + entryY else 0f
+                                scaleX = enterScale * dragScale
+                                scaleY = enterScale * dragScale
+                                alpha = if (isCurrent) 1f - deleteProgress * 0.32f else 1f
+                            }
+                    )
+                }
             }
         }
 
