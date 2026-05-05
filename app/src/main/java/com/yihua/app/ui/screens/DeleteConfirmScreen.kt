@@ -1,12 +1,23 @@
 package com.yihua.app.ui.screens
 
 import android.app.Activity
-import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -16,8 +27,24 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,7 +60,18 @@ import com.yihua.app.data.Photo
 import com.yihua.app.ui.theme.AppleSystemGray6
 import com.yihua.app.ui.theme.LightGrayText
 import com.yihua.app.ui.theme.SwipeUpColor
+import com.yihua.app.viewmodel.DeleteResult
 import com.yihua.app.viewmodel.PhotoViewModel
+
+private enum class DeleteDialogState {
+    None,
+    Confirm,
+    EmptyQueue,
+    Cancelled,
+    RequestFailed,
+    DeleteFailed,
+    PartialFailure
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,20 +80,48 @@ fun DeleteConfirmScreen(
     onNavigateBack: () -> Unit
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    var showConfirmDialog by remember { mutableStateOf(false) }
-    var showDeleteError by remember { mutableStateOf(false) }
-    var showCancelledInfo by remember { mutableStateOf(false) }
-    var showRequestError by remember { mutableStateOf(false) }
+    var dialogState by remember { mutableStateOf(DeleteDialogState.None) }
+    var partialFailureMessage by remember { mutableStateOf("") }
+    var completeDeleteOnSystemResult by remember { mutableStateOf(false) }
 
-    // 系统删除结果回调
+    fun handleDeleteResult(result: DeleteResult) {
+        when (result) {
+            DeleteResult.EmptyQueue -> dialogState = DeleteDialogState.EmptyQueue
+            is DeleteResult.RequiresUserConfirmation -> {
+                completeDeleteOnSystemResult = result.completeOnResult
+                try {
+                    deleteLauncher.launch(
+                        IntentSenderRequest.Builder(result.intentSender).build()
+                    )
+                } catch (_: Exception) {
+                    completeDeleteOnSystemResult = false
+                    dialogState = DeleteDialogState.RequestFailed
+                }
+            }
+            is DeleteResult.Success -> onNavigateBack()
+            is DeleteResult.PartialFailure -> {
+                partialFailureMessage = "已删除 ${result.deletedCount} 张，${result.failedCount} 张删除失败，失败照片仍保留在待删除队列。"
+                dialogState = DeleteDialogState.PartialFailure
+            }
+            is DeleteResult.Failure -> dialogState = DeleteDialogState.DeleteFailed
+        }
+    }
+
     val deleteLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartIntentSenderForResult()
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
-            viewModel.onDeleteCompleted()
-            onNavigateBack()
+            if (completeDeleteOnSystemResult) {
+                viewModel.onDeleteCompleted()
+                completeDeleteOnSystemResult = false
+                onNavigateBack()
+            } else {
+                completeDeleteOnSystemResult = false
+                handleDeleteResult(viewModel.requestDeleteQueuedPhotos())
+            }
         } else {
-            showCancelledInfo = true
+            completeDeleteOnSystemResult = false
+            dialogState = DeleteDialogState.Cancelled
         }
     }
 
@@ -88,7 +154,7 @@ fun DeleteConfirmScreen(
                 count = state.deleteQueue.size,
                 onConfirmClick = {
                     if (state.deleteQueue.isNotEmpty()) {
-                        showConfirmDialog = true
+                        dialogState = DeleteDialogState.Confirm
                     }
                 }
             )
@@ -113,98 +179,95 @@ fun DeleteConfirmScreen(
         }
     }
 
-    // Android 10 删除失败提示
-    if (showDeleteError) {
-        AlertDialog(
-            onDismissRequest = { showDeleteError = false },
-            title = { Text("删除失败", fontWeight = FontWeight.Bold) },
-            text = { Text("照片删除失败，请检查存储权限后重试。待删除队列已保留。") },
-            confirmButton = {
-                TextButton(onClick = { showDeleteError = false }) { Text("确定") }
+    when (dialogState) {
+        DeleteDialogState.None -> Unit
+        DeleteDialogState.Confirm -> ConfirmDeleteDialog(
+            count = state.deleteQueue.size,
+            onDismiss = { dialogState = DeleteDialogState.None },
+            onConfirm = {
+                dialogState = DeleteDialogState.None
+                handleDeleteResult(viewModel.requestDeleteQueuedPhotos())
             }
         )
+        DeleteDialogState.EmptyQueue -> InfoDialog(
+            title = "没有待删除照片",
+            message = "待删除队列为空。",
+            onDismiss = { dialogState = DeleteDialogState.None }
+        )
+        DeleteDialogState.Cancelled -> InfoDialog(
+            title = "已取消删除",
+            message = "照片未被删除，待删除队列已保留。",
+            onDismiss = { dialogState = DeleteDialogState.None }
+        )
+        DeleteDialogState.RequestFailed -> InfoDialog(
+            title = "无法发起删除请求",
+            message = "无法发起系统删除请求，请重试。待删除队列已保留。",
+            onDismiss = { dialogState = DeleteDialogState.None }
+        )
+        DeleteDialogState.DeleteFailed -> InfoDialog(
+            title = "删除失败",
+            message = "照片删除失败，请检查权限后重试。待删除队列已保留。",
+            onDismiss = { dialogState = DeleteDialogState.None }
+        )
+        DeleteDialogState.PartialFailure -> InfoDialog(
+            title = "部分照片删除失败",
+            message = partialFailureMessage,
+            onDismiss = { dialogState = DeleteDialogState.None }
+        )
     }
+}
 
-    // Android 11+ 用户取消系统删除弹窗提示
-    if (showCancelledInfo) {
-        AlertDialog(
-            onDismissRequest = { showCancelledInfo = false },
-            title = { Text("已取消删除", fontWeight = FontWeight.Bold) },
-            text = { Text("照片未被删除，待删除队列已保留。") },
-            confirmButton = {
-                TextButton(onClick = { showCancelledInfo = false }) { Text("知道了") }
+@Composable
+private fun ConfirmDeleteDialog(
+    count: Int,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                Icons.Default.Delete,
+                contentDescription = null,
+                tint = SwipeUpColor,
+                modifier = Modifier.size(32.dp)
+            )
+        },
+        title = { Text("确认删除？", fontWeight = FontWeight.Bold) },
+        text = {
+            Text(
+                "将永久删除 $count 张照片，此操作不可恢复。",
+                textAlign = TextAlign.Center
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors = ButtonDefaults.buttonColors(containerColor = SwipeUpColor)
+            ) {
+                Text("确认删除", color = Color.White)
             }
-        )
-    }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        }
+    )
+}
 
-    // Android 11+ 无法发起系统删除请求提示
-    if (showRequestError) {
-        AlertDialog(
-            onDismissRequest = { showRequestError = false },
-            title = { Text("无法发起删除请求", fontWeight = FontWeight.Bold) },
-            text = { Text("无法发起系统删除请求，请重试。待删除队列已保留。") },
-            confirmButton = {
-                TextButton(onClick = { showRequestError = false }) { Text("知道了") }
-            }
-        )
-    }
-
-    // 二次确认弹窗
-    if (showConfirmDialog) {
-        AlertDialog(
-            onDismissRequest = { showConfirmDialog = false },
-            icon = {
-                Icon(
-                    Icons.Default.Delete,
-                    contentDescription = null,
-                    tint = SwipeUpColor,
-                    modifier = Modifier.size(32.dp)
-                )
-            },
-            title = {
-                Text("确认删除？", fontWeight = FontWeight.Bold)
-            },
-            text = {
-                Text(
-                    "将永久删除 ${state.deleteQueue.size} 张照片，此操作不可恢复。",
-                    textAlign = TextAlign.Center
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showConfirmDialog = false
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                            // Android 11+：使用系统删除确认弹窗
-                            val intentSender = viewModel.createDeleteRequest()
-                            if (intentSender != null) {
-                                deleteLauncher.launch(
-                                    IntentSenderRequest.Builder(intentSender).build()
-                                )
-                            } else {
-                                showRequestError = true
-                            }
-                        } else {
-                            // Android 10：直接删除，失败时保留队列并提示
-                            if (viewModel.deleteDirectly()) {
-                                onNavigateBack()
-                            } else {
-                                showDeleteError = true
-                            }
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = SwipeUpColor)
-                ) {
-                    Text("确认删除", color = Color.White)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showConfirmDialog = false }) {
-                    Text("取消")
-                }
-            }
-        )
-    }
+@Composable
+private fun InfoDialog(
+    title: String,
+    message: String,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title, fontWeight = FontWeight.Bold) },
+        text = { Text(message) },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("知道了") }
+        }
+    )
 }
 
 @Composable
@@ -212,9 +275,7 @@ private fun BottomDeleteBar(
     count: Int,
     onConfirmClick: () -> Unit
 ) {
-    Surface(
-        shadowElevation = 8.dp
-    ) {
+    Surface(shadowElevation = 8.dp) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -299,7 +360,6 @@ private fun PhotoThumbnailItem(
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize()
         )
-        // 删除角标
         Box(
             modifier = Modifier
                 .align(Alignment.TopEnd)
