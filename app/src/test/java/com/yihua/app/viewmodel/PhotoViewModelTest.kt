@@ -6,7 +6,6 @@ import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import com.yihua.app.data.Photo
 import com.yihua.app.data.PhotoDataSource
-import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -58,7 +57,13 @@ class PhotoViewModelTest {
     }
 
     private fun makePhotos(count: Int): List<Photo> = (1L..count).map { id ->
-        Photo(id = id, uri = mockk<Uri>(), displayName = "photo_$id.jpg", dateAdded = id, size = 1000L)
+        Photo(
+            id = id,
+            uri = Uri.parse("content://media/external/images/media/$id"),
+            displayName = "photo_$id.jpg",
+            dateAdded = id,
+            size = 1000L
+        )
     }
 
     private fun makeViewModel(photos: List<Photo> = emptyList()): PhotoViewModel {
