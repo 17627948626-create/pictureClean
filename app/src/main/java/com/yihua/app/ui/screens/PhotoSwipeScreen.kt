@@ -219,23 +219,29 @@ private fun PhotoContent(
         lastReviewableState = state
     }
 
+    val stageState = when {
+        state.screenState == PhotoListState.Reviewable -> state
+        state.screenState == PhotoListState.AllQueuedForDelete && keepReviewStageForAnimation -> lastReviewableState
+        else -> null
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(AppleSystemGray6)
             .statusBarsPadding()
     ) {
-        when (state.screenState) {
-            PhotoListState.Loading -> {
+        when {
+            state.screenState == PhotoListState.Loading -> {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = LightGrayText)
                 }
             }
 
-            PhotoListState.EmptyLibrary -> EmptyLibraryState()
+            state.screenState == PhotoListState.EmptyLibrary -> EmptyLibraryState()
 
-            PhotoListState.Reviewable -> ReviewablePhotoContent(
-                state = state,
+            stageState != null -> ReviewablePhotoContent(
+                state = stageState,
                 deleteQueueSize = state.deleteQueue.size,
                 isPartialAccess = isPartialAccess,
                 onNavigateToConfirm = onNavigateToConfirm,
@@ -247,28 +253,10 @@ private fun PhotoContent(
                 onThumbnailClick = viewModel::goToIndex
             )
 
-            PhotoListState.AllQueuedForDelete -> {
-                val retainedState = lastReviewableState
-                if (keepReviewStageForAnimation && retainedState != null) {
-                    ReviewablePhotoContent(
-                        state = retainedState,
-                        deleteQueueSize = state.deleteQueue.size,
-                        isPartialAccess = isPartialAccess,
-                        onNavigateToConfirm = onNavigateToConfirm,
-                        onGoToNextPhoto = viewModel::goToNextPhoto,
-                        onGoToPreviousPhoto = viewModel::goToPreviousPhoto,
-                        onQueueCurrentPhotoForDeletion = viewModel::queueCurrentPhotoForDeletion,
-                        onRestoreLastDeletedPhoto = viewModel::restoreLastDeletedPhoto,
-                        onAnimationRunningChange = { keepReviewStageForAnimation = it },
-                        onThumbnailClick = viewModel::goToIndex
-                    )
-                } else {
-                    AllQueuedForDeleteState(
-                        deleteQueueSize = state.deleteQueue.size,
-                        onNavigateToConfirm = onNavigateToConfirm
-                    )
-                }
-            }
+            state.screenState == PhotoListState.AllQueuedForDelete -> AllQueuedForDeleteState(
+                deleteQueueSize = state.deleteQueue.size,
+                onNavigateToConfirm = onNavigateToConfirm
+            )
         }
     }
 }
