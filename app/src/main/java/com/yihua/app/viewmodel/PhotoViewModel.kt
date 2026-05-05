@@ -6,6 +6,7 @@ import android.content.IntentSender
 import android.content.SharedPreferences
 import android.os.Build
 import android.provider.MediaStore
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.yihua.app.data.Photo
@@ -19,6 +20,7 @@ import kotlinx.coroutines.launch
 
 enum class PhotoListState {
     Loading,
+    LoadFailed,
     EmptyLibrary,
     AllQueuedForDelete,
     Reviewable
@@ -36,7 +38,8 @@ data class PhotoUiState(
     val deleteQueue: List<Photo> = emptyList(),
     val deleteQueueIds: Set<Long> = emptySet(),
     val deleteHistory: List<DeleteHistoryEntry> = emptyList(),
-    val screenState: PhotoListState = PhotoListState.Loading
+    val screenState: PhotoListState = PhotoListState.Loading,
+    val errorMessage: String? = null
 ) {
     val currentPhoto: Photo? get() = visiblePhotos.getOrNull(currentIndex)
 
@@ -60,7 +63,8 @@ private fun PhotoUiState.recomputeDerivedState(): PhotoUiState {
         visiblePhotos = visible,
         deleteQueueIds = queuedIds,
         screenState = screen,
-        currentIndex = currentIndex.coerceIn(0, maxOf(0, visible.size - 1))
+        currentIndex = currentIndex.coerceIn(0, maxOf(0, visible.size - 1)),
+        errorMessage = null
     )
 }
 
@@ -79,6 +83,8 @@ class PhotoViewModel(
     companion object {
         private const val PREFS_NAME = "yihua_prefs"
         private const val KEY_CURRENT_INDEX = "current_index"
+        private const val TAG = "PhotoViewModel"
+        private const val LOAD_FAILED_MESSAGE = "照片加载失败，请检查相册权限后重试。"
     }
 
     private val _uiState = MutableStateFlow(PhotoUiState())
@@ -90,19 +96,40 @@ class PhotoViewModel(
 
     fun loadPhotos() {
         viewModelScope.launch {
-            _uiState.update { it.copy(screenState = PhotoListState.Loading) }
+            _uiState.update {
+                it.copy(
+                    screenState = PhotoListState.Loading,
+                    errorMessage = null
+                )
+            }
 
-            val photos = repository.loadPhotos()
-            val savedIndex = prefs.getInt(KEY_CURRENT_INDEX, 0)
-                .coerceIn(0, maxOf(0, photos.size - 1))
+            try {
+                val photos = repository.loadPhotos()
+                val savedIndex = prefs.getInt(KEY_CURRENT_INDEX, 0)
+                    .coerceIn(0, maxOf(0, photos.size - 1))
 
-            _uiState.update { state ->
-                state.copy(
-                    allPhotos = photos,
-                    currentIndex = savedIndex,
-                    deleteQueue = emptyList(),
-                    deleteHistory = emptyList()
-                ).recomputeDerivedState()
+                _uiState.update { state ->
+                    state.copy(
+                        allPhotos = photos,
+                        currentIndex = savedIndex,
+                        deleteQueue = emptyList(),
+                        deleteHistory = emptyList()
+                    ).recomputeDerivedState()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load photos", e)
+                _uiState.update {
+                    it.copy(
+                        allPhotos = emptyList(),
+                        visiblePhotos = emptyList(),
+                        currentIndex = 0,
+                        deleteQueue = emptyList(),
+                        deleteQueueIds = emptySet(),
+                        deleteHistory = emptyList(),
+                        screenState = PhotoListState.LoadFailed,
+                        errorMessage = LOAD_FAILED_MESSAGE
+                    )
+                }
             }
         }
     }
@@ -193,6 +220,7 @@ class PhotoViewModel(
             try {
                 getApplication<Application>().contentResolver.delete(photo.uri, null, null)
             } catch (e: Exception) {
+                Log.e(TAG, "Failed to delete photo directly: ${photo.uri}", e)
                 allSuccess = false
             }
         }
