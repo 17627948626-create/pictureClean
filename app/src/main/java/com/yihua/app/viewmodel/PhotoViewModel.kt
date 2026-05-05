@@ -8,6 +8,7 @@ import android.content.SharedPreferences
 import android.os.Build
 import android.provider.MediaStore
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.yihua.app.data.Photo
@@ -219,10 +220,10 @@ class PhotoViewModel(
         val queue = _uiState.value.deleteQueue
         if (queue.isEmpty()) return DeleteResult.EmptyQueue
 
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            requestSystemDelete(queue)
-        } else {
-            deleteLegacyQueuedPhotos(queue)
+        return when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> requestSystemDelete(queue)
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> deleteApi29QueuedPhotos(queue)
+            else -> deletePreQQueuedPhotos(queue)
         }
     }
 
@@ -241,7 +242,32 @@ class PhotoViewModel(
         }
     }
 
-    private fun deleteLegacyQueuedPhotos(queue: List<Photo>): DeleteResult {
+    @RequiresApi(Build.VERSION_CODES.Q)
+    private fun deleteApi29QueuedPhotos(queue: List<Photo>): DeleteResult {
+        return deleteQueuedPhotosDirectly(
+            queue = queue,
+            onRecoverableSecurityException = { photo, exception, deletedIds ->
+                Log.e(TAG, "Delete needs user confirmation. uri=${photo.uri}, sdk=${Build.VERSION.SDK_INT}", exception)
+                if (deletedIds.isNotEmpty()) markPhotosDeleted(deletedIds)
+                DeleteResult.RequiresUserConfirmation(
+                    intentSender = exception.userAction.actionIntent.intentSender,
+                    completeOnResult = false
+                )
+            }
+        )
+    }
+
+    private fun deletePreQQueuedPhotos(queue: List<Photo>): DeleteResult {
+        return deleteQueuedPhotosDirectly(
+            queue = queue,
+            onRecoverableSecurityException = { _, _, _ -> DeleteResult.Failure(queue.size) }
+        )
+    }
+
+    private fun deleteQueuedPhotosDirectly(
+        queue: List<Photo>,
+        onRecoverableSecurityException: (Photo, RecoverableSecurityException, Set<Long>) -> DeleteResult
+    ): DeleteResult {
         val contentResolver = getApplication<Application>().contentResolver
         val deletedIds = mutableSetOf<Long>()
         val failedIds = mutableSetOf<Long>()
@@ -256,12 +282,7 @@ class PhotoViewModel(
                     failedIds += photo.id
                 }
             } catch (e: RecoverableSecurityException) {
-                Log.e(TAG, "Delete needs user confirmation. uri=${photo.uri}, sdk=${Build.VERSION.SDK_INT}", e)
-                if (deletedIds.isNotEmpty()) markPhotosDeleted(deletedIds)
-                return DeleteResult.RequiresUserConfirmation(
-                    intentSender = e.userAction.actionIntent.intentSender,
-                    completeOnResult = false
-                )
+                return onRecoverableSecurityException(photo, e, deletedIds)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to delete photo directly. uri=${photo.uri}, sdk=${Build.VERSION.SDK_INT}", e)
                 failedIds += photo.id
