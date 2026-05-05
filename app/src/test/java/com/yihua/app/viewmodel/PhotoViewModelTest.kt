@@ -99,6 +99,18 @@ class PhotoViewModelTest {
     }
 
     @Test
+    fun `requestDeleteQueuedPhotos on empty queue returns EmptyQueue`() {
+        val vm = makeViewModel(makePhotos(2))
+        vm.loadPhotos()
+
+        val result = vm.requestDeleteQueuedPhotos()
+
+        assertEquals(DeleteResult.EmptyQueue, result)
+        assertTrue(vm.uiState.value.deleteQueue.isEmpty())
+        assertEquals(2, vm.uiState.value.allPhotos.size)
+    }
+
+    @Test
     fun `goToNextPhoto does not exceed last photo`() {
         val photos = makePhotos(2)
         val vm = makeViewModel(photos)
