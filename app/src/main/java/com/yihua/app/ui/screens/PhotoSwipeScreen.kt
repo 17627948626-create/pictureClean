@@ -1,7 +1,11 @@
 package com.yihua.app.ui.screens
 
 import android.os.Build
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -42,11 +46,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -75,19 +79,32 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
+import kotlinx.coroutines.launch
 
-private enum class GestureAxis { Horizontal, Vertical }
+private const val SwipeTriggerPx = 72f
+private const val DirectionLockPx = 10f
+private const val DirectionRatio = 1.15f
+
+private enum class GestureDirection {
+    Left,
+    Right,
+    Up,
+    Down
+}
 
 private enum class OverlayMotion {
-    DeleteUp,
-    RestoreMoveRight
+    FlyLeft,
+    FlyUp,
+    EnterFromLeft,
+    EnterFromTop
 }
 
-private enum class EntryMotion {
-    None,
-    FromRight,
-    FromTop
-}
+private data class OverlayCardState(
+    val photo: Photo,
+    val motion: OverlayMotion,
+    val startX: Float = 0f,
+    val startY: Float = 0f
+)
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -274,9 +291,9 @@ private fun PhotoContent(
 
                 SwipeStage(
                     state = state,
-                    onSwipeLeft = viewModel::swipeLeft,
-                    onSwipeRight = viewModel::swipeRight,
-                    onSwipeUp = viewModel::swipeUp,
+                    onSwipeLeftToNext = viewModel::swipeRight,
+                    onSwipeRightToPrevious = viewModel::swipeLeft,
+                    onSwipeUpToDelete = viewModel::swipeUp,
                     onSwipeDownUndo = { viewModel.undoDelete() }
                 )
 
@@ -309,99 +326,146 @@ private fun PartialAccessBanner() {
 @Composable
 private fun ColumnScope.SwipeStage(
     state: PhotoUiState,
-    onSwipeLeft: () -> Unit,
-    onSwipeRight: () -> Unit,
-    onSwipeUp: () -> Unit,
+    onSwipeLeftToNext: () -> Unit,
+    onSwipeRightToPrevious: () -> Unit,
+    onSwipeUpToDelete: () -> Unit,
     onSwipeDownUndo: () -> Boolean
 ) {
+    val scope = rememberCoroutineScope()
+    val overlayProgress = remember { Animatable(0f) }
+
     var dragX by remember { mutableFloatStateOf(0f) }
     var dragY by remember { mutableFloatStateOf(0f) }
-    var gestureAxis by remember { mutableStateOf<GestureAxis?>(null) }
+    var gestureDirection by remember { mutableStateOf<GestureDirection?>(null) }
     var handledGesture by remember { mutableStateOf(false) }
+    var animationRunning by remember { mutableStateOf(false) }
 
     var stageWidth by remember { mutableFloatStateOf(0f) }
     var stageHeight by remember { mutableFloatStateOf(0f) }
-    var pageSettling by remember { mutableStateOf(false) }
-    var pageTarget by remember { mutableFloatStateOf(0f) }
-    var pendingPageMove by remember { mutableStateOf<Int?>(null) }
-
-    var overlayPhoto by remember { mutableStateOf<Photo?>(null) }
-    var overlayMotion by remember { mutableStateOf<OverlayMotion?>(null) }
-    var overlayTarget by remember { mutableFloatStateOf(0f) }
-
-    var entryMotion by remember { mutableStateOf(EntryMotion.None) }
-    var cardEntered by remember(state.currentPhoto?.id) { mutableStateOf(false) }
-
-    val pageProgress by animateFloatAsState(
-        targetValue = pageTarget,
-        animationSpec = tween(durationMillis = 220),
-        label = "photo-page-snap",
-        finishedListener = {
-            val move = pendingPageMove
-            if (pageSettling && move != null) {
-                if (move < 0) onSwipeRight() else onSwipeLeft()
-            }
-            pageSettling = false
-            pendingPageMove = null
-            pageTarget = 0f
-            dragX = 0f
-        }
-    )
-
-    val overlayProgress by animateFloatAsState(
-        targetValue = overlayTarget,
-        animationSpec = tween(durationMillis = 200),
-        label = "photo-overlay",
-        finishedListener = { value ->
-            if (value >= 1f) {
-                overlayPhoto = null
-                overlayMotion = null
-                overlayTarget = 0f
-            }
-        }
-    )
-
-    val entryProgress by animateFloatAsState(
-        targetValue = if (cardEntered) 1f else 0f,
-        animationSpec = tween(durationMillis = 190),
-        label = "photo-entry",
-        finishedListener = { value ->
-            if (value >= 1f) entryMotion = EntryMotion.None
-        }
-    )
+    var overlayCard by remember { mutableStateOf<OverlayCardState?>(null) }
+    var baseOverridePhoto by remember { mutableStateOf<Photo?>(null) }
 
     fun resetDrag() {
         dragX = 0f
         dragY = 0f
-        gestureAxis = null
+        gestureDirection = null
         handledGesture = false
     }
 
-    fun startOverlay(photo: Photo, motion: OverlayMotion) {
-        overlayPhoto = photo
-        overlayMotion = motion
-        overlayTarget = 0f
-        overlayTarget = 1f
+    fun lockDirection(totalX: Float, totalY: Float): GestureDirection? {
+        val absX = abs(totalX)
+        val absY = abs(totalY)
+        if (absX <= DirectionLockPx && absY <= DirectionLockPx) return null
+        return when {
+            absX > absY * DirectionRatio && totalX < 0f -> GestureDirection.Left
+            absX > absY * DirectionRatio && totalX > 0f -> GestureDirection.Right
+            absY > absX * DirectionRatio && totalY < 0f -> GestureDirection.Up
+            absY > absX * DirectionRatio && totalY > 0f -> GestureDirection.Down
+            else -> null
+        }
     }
 
-    fun settleBack() {
-        pageSettling = true
-        pendingPageMove = null
-        pageTarget = 0f
+    fun springBack() {
+        val fromX = dragX
+        val fromY = dragY
+        scope.launch {
+            animationRunning = true
+            val xAnim = Animatable(fromX)
+            val yAnim = Animatable(fromY)
+            launch {
+                xAnim.animateTo(
+                    targetValue = 0f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessMediumLow
+                    )
+                ) { dragX = value }
+            }
+            yAnim.animateTo(
+                targetValue = 0f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                )
+            ) { dragY = value }
+            resetDrag()
+            animationRunning = false
+        }
     }
 
-    fun settleToPage(direction: Int) {
-        pageSettling = true
-        pendingPageMove = direction
-        pageTarget = direction * (stageWidth.takeIf { it > 0f } ?: 1f)
+    fun startOutgoing(
+        photo: Photo,
+        motion: OverlayMotion,
+        startX: Float,
+        startY: Float,
+        commitState: () -> Unit
+    ) {
+        scope.launch {
+            animationRunning = true
+            handledGesture = true
+            overlayProgress.snapTo(0f)
+            overlayCard = OverlayCardState(
+                photo = photo,
+                motion = motion,
+                startX = startX,
+                startY = startY
+            )
+            commitState()
+            resetDrag()
+            overlayProgress.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(
+                    durationMillis = 150,
+                    easing = FastOutLinearInEasing
+                )
+            )
+            overlayCard = null
+            baseOverridePhoto = null
+            overlayProgress.snapTo(0f)
+            animationRunning = false
+        }
+    }
+
+    fun startCoverIn(
+        incomingPhoto: Photo,
+        oldBasePhoto: Photo?,
+        motion: OverlayMotion,
+        commitState: () -> Boolean
+    ) {
+        scope.launch {
+            animationRunning = true
+            handledGesture = true
+            overlayProgress.snapTo(0f)
+            baseOverridePhoto = oldBasePhoto
+            overlayCard = OverlayCardState(
+                photo = incomingPhoto,
+                motion = motion
+            )
+            val committed = commitState()
+            if (committed) {
+                resetDrag()
+                overlayProgress.animateTo(
+                    targetValue = 1f,
+                    animationSpec = tween(
+                        durationMillis = 200,
+                        easing = LinearOutSlowInEasing
+                    )
+                )
+            }
+            overlayCard = null
+            baseOverridePhoto = null
+            overlayProgress.snapTo(0f)
+            animationRunning = false
+        }
     }
 
     LaunchedEffect(state.currentPhoto?.id) {
-        resetDrag()
-        pageSettling = false
-        pendingPageMove = null
-        pageTarget = 0f
-        cardEntered = true
+        if (!animationRunning) {
+            resetDrag()
+            overlayCard = null
+            baseOverridePhoto = null
+            overlayProgress.snapTo(0f)
+        }
     }
 
     Box(
@@ -413,178 +477,175 @@ private fun ColumnScope.SwipeStage(
                 stageWidth = it.width.toFloat()
                 stageHeight = it.height.toFloat()
             }
-            .pointerInput(state.currentPhoto?.id, state.visiblePhotos.size, state.canSwipeDownToUndo) {
+            .pointerInput(
+                state.currentPhoto?.id,
+                state.currentIndex,
+                state.visiblePhotos.size,
+                state.canSwipeDownToUndo
+            ) {
                 var totalX = 0f
                 var totalY = 0f
                 detectDragGestures(
                     onDragStart = {
                         totalX = 0f
                         totalY = 0f
-                        gestureAxis = null
+                        gestureDirection = null
                         handledGesture = false
                     },
                     onDragCancel = {
-                        if (gestureAxis == GestureAxis.Horizontal) settleBack() else resetDrag()
+                        if (!handledGesture && (dragX != 0f || dragY != 0f)) springBack() else resetDrag()
                     },
                     onDrag = { change, dragAmount ->
                         change.consume()
-                        if (handledGesture || pageSettling) return@detectDragGestures
+                        if (handledGesture || animationRunning) return@detectDragGestures
 
                         totalX += dragAmount.x
                         totalY += dragAmount.y
 
-                        if (gestureAxis == null) {
-                            val absX = abs(totalX)
-                            val absY = abs(totalY)
-                            if (absX > 10f || absY > 10f) {
-                                gestureAxis = if (absX > absY * 1.15f) GestureAxis.Horizontal else GestureAxis.Vertical
-                            }
+                        if (gestureDirection == null) {
+                            gestureDirection = lockDirection(totalX, totalY)
                         }
 
-                        when (gestureAxis) {
-                            GestureAxis.Horizontal -> {
-                                val canMoveRight = state.currentIndex > 0
-                                val canMoveLeft = state.currentIndex < state.visiblePhotos.lastIndex
-                                dragX = when {
-                                    totalX > 0f && !canMoveRight -> totalX * 0.28f
-                                    totalX < 0f && !canMoveLeft -> totalX * 0.28f
-                                    else -> totalX
-                                }
+                        when (gestureDirection) {
+                            GestureDirection.Left -> {
+                                dragX = if (state.currentIndex < state.visiblePhotos.lastIndex) totalX.coerceAtMost(0f) else 0f
                                 dragY = 0f
                             }
-                            GestureAxis.Vertical -> {
+                            GestureDirection.Up -> {
                                 dragX = 0f
-                                // 下滑只用于触发恢复，不允许当前照片被拉下去；上滑才驱动删除视觉反馈。
                                 dragY = totalY.coerceAtMost(0f)
-
-                                val absX = abs(totalX)
-                                val absY = abs(totalY)
-                                val trigger = 72f
-
-                                // 业务状态先发生：上滑一旦被接受，立刻进入待删除队列。
-                                if (totalY < -trigger && absY > absX * 1.15f) {
-                                    val exiting = state.currentPhoto
-                                    handledGesture = true
-                                    if (exiting != null) {
-                                        startOverlay(exiting, OverlayMotion.DeleteUp)
-                                        entryMotion = EntryMotion.FromRight
-                                    }
-                                    onSwipeUp()
-                                    resetDrag()
-                                    return@detectDragGestures
-                                }
                             }
-                            null -> Unit
+                            GestureDirection.Right,
+                            GestureDirection.Down,
+                            null -> {
+                                dragX = 0f
+                                dragY = 0f
+                            }
                         }
                     },
                     onDragEnd = {
-                        if (!handledGesture && !pageSettling) {
-                            val absX = abs(totalX)
-                            val absY = abs(totalY)
-                            val trigger = 72f
-                            when (gestureAxis) {
-                                GestureAxis.Horizontal -> {
-                                    val pageWidth = stageWidth.takeIf { it > 0f } ?: 1f
-                                    val shouldPage = abs(dragX) > minOf(pageWidth * 0.22f, 120f)
-                                    when {
-                                        shouldPage && dragX < 0f && state.currentIndex < state.visiblePhotos.lastIndex -> settleToPage(-1)
-                                        shouldPage && dragX > 0f && state.currentIndex > 0 -> settleToPage(1)
-                                        else -> settleBack()
-                                    }
+                        if (handledGesture || animationRunning) return@detectDragGestures
+
+                        val absX = abs(totalX)
+                        val absY = abs(totalY)
+                        val currentPhoto = state.currentPhoto
+
+                        when (gestureDirection) {
+                            GestureDirection.Left -> {
+                                val canGoNext = state.currentIndex < state.visiblePhotos.lastIndex
+                                val accepted = canGoNext && totalX < -SwipeTriggerPx && absX > absY * DirectionRatio
+                                if (accepted && currentPhoto != null) {
+                                    startOutgoing(
+                                        photo = currentPhoto,
+                                        motion = OverlayMotion.FlyLeft,
+                                        startX = dragX,
+                                        startY = 0f,
+                                        commitState = onSwipeLeftToNext
+                                    )
+                                } else {
+                                    springBack()
                                 }
-                                GestureAxis.Vertical -> {
-                                    when {
-                                        totalY < -trigger && absY > absX * 1.15f -> {
-                                            val exiting = state.currentPhoto
-                                            if (exiting != null) {
-                                                startOverlay(exiting, OverlayMotion.DeleteUp)
-                                                entryMotion = EntryMotion.FromRight
-                                            }
-                                            onSwipeUp()
-                                            resetDrag()
-                                        }
-                                        totalY > trigger && absY > absX * 1.15f && state.canSwipeDownToUndo -> {
-                                            val displaced = state.currentPhoto
-                                            val didUndo = onSwipeDownUndo()
-                                            if (didUndo && displaced != null) {
-                                                startOverlay(displaced, OverlayMotion.RestoreMoveRight)
-                                                entryMotion = EntryMotion.FromTop
-                                            }
-                                            resetDrag()
-                                        }
-                                        else -> resetDrag()
-                                    }
-                                }
-                                null -> resetDrag()
                             }
+                            GestureDirection.Up -> {
+                                val accepted = totalY < -SwipeTriggerPx && absY > absX * DirectionRatio
+                                if (accepted && currentPhoto != null) {
+                                    startOutgoing(
+                                        photo = currentPhoto,
+                                        motion = OverlayMotion.FlyUp,
+                                        startX = 0f,
+                                        startY = dragY,
+                                        commitState = onSwipeUpToDelete
+                                    )
+                                } else {
+                                    springBack()
+                                }
+                            }
+                            GestureDirection.Right -> {
+                                val canGoPrevious = state.currentIndex > 0
+                                val incomingPhoto = state.visiblePhotos.getOrNull(state.currentIndex - 1)
+                                val accepted = canGoPrevious && totalX > SwipeTriggerPx && absX > absY * DirectionRatio
+                                if (accepted && incomingPhoto != null) {
+                                    startCoverIn(
+                                        incomingPhoto = incomingPhoto,
+                                        oldBasePhoto = currentPhoto,
+                                        motion = OverlayMotion.EnterFromLeft,
+                                        commitState = {
+                                            onSwipeRightToPrevious()
+                                            true
+                                        }
+                                    )
+                                } else {
+                                    resetDrag()
+                                }
+                            }
+                            GestureDirection.Down -> {
+                                val incomingPhoto = state.deleteHistory.lastOrNull()?.photo
+                                val accepted = state.canSwipeDownToUndo && totalY > SwipeTriggerPx && absY > absX * DirectionRatio
+                                if (accepted && incomingPhoto != null) {
+                                    startCoverIn(
+                                        incomingPhoto = incomingPhoto,
+                                        oldBasePhoto = currentPhoto,
+                                        motion = OverlayMotion.EnterFromTop,
+                                        commitState = onSwipeDownUndo
+                                    )
+                                } else {
+                                    resetDrag()
+                                }
+                            }
+                            null -> resetDrag()
                         }
                     }
                 )
             },
         contentAlignment = Alignment.Center
     ) {
-        val pageOffset = if (pageSettling) pageProgress else dragX
-        // 裁剪只作用于分页卡片，overlay 在外层不受裁剪，可以飞出边界
-        Box(modifier = Modifier.fillMaxSize().clipToBounds()) {
-            listOf(-1, 0, 1).forEach { offset ->
-                val index = state.currentIndex + offset
-                val photo = state.visiblePhotos.getOrNull(index)
-                if (photo != null) {
-                    PhotoCard(
-                        photo = photo,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer {
-                                val pageStep = stageWidth.takeIf { it > 0f } ?: size.width
-                                val baseX = offset * pageStep + pageOffset
-                                val isCurrent = offset == 0
-                                val clampedY = dragY.coerceIn(-240f, 0f)
-                                val deleteProgress = if (isCurrent) (-clampedY / 220f).coerceIn(0f, 1f) else 0f
-                                // 恢复：从上方落入，0.5→1.0 放大；其余情况无缩放
-                                val enterScale = if (isCurrent && entryMotion == EntryMotion.FromTop) {
-                                    0.5f + entryProgress * 0.5f
-                                } else 1f
-                                val dragScale = if (isCurrent) 1f - deleteProgress * 0.16f else 1f
-                                // 删除后：下一张从右侧整屏宽滑入
-                                val entryX = if (isCurrent && entryMotion == EntryMotion.FromRight) {
-                                    (1f - entryProgress) * pageStep
-                                } else 0f
-                                // 恢复：误删照片从屏幕上方落下
-                                val entryY = if (isCurrent && entryMotion == EntryMotion.FromTop) {
-                                    -(1f - entryProgress) * stageHeight
-                                } else 0f
+        val displayPhoto = baseOverridePhoto ?: state.currentPhoto
+        val clampedDragY = dragY.coerceAtMost(0f)
+        val deletePreviewProgress = (-clampedDragY / 220f).coerceIn(0f, 1f)
+        val currentScale = 1f - deletePreviewProgress * 0.15f
 
-                                translationX = baseX + entryX
-                                translationY = if (isCurrent) clampedY + entryY else 0f
-                                scaleX = enterScale * dragScale
-                                scaleY = enterScale * dragScale
-                                alpha = if (isCurrent) 1f - deleteProgress * 0.32f else 1f
-                            }
-                    )
-                }
-            }
-        }
-
-        overlayPhoto?.let { photo ->
+        displayPhoto?.let { photo ->
             PhotoCard(
                 photo = photo,
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
-                        when (overlayMotion) {
-                            OverlayMotion.DeleteUp -> {
-                                // 向上飞出，缩小到 0.5x，不淡出
-                                val flyDistance = stageHeight.takeIf { it > 0f } ?: size.height
-                                translationY = -overlayProgress * flyDistance
-                                scaleX = 1f - overlayProgress * 0.5f
-                                scaleY = 1f - overlayProgress * 0.5f
+                        translationX = dragX
+                        translationY = clampedDragY
+                        scaleX = currentScale
+                        scaleY = currentScale
+                    }
+            )
+        }
+
+        overlayCard?.let { card ->
+            PhotoCard(
+                photo = card.photo,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        val width = stageWidth.takeIf { it > 0f } ?: size.width
+                        val height = stageHeight.takeIf { it > 0f } ?: size.height
+                        val progress = overlayProgress.value
+                        when (card.motion) {
+                            OverlayMotion.FlyLeft -> {
+                                val endX = -width * 1.1f
+                                translationX = card.startX + (endX - card.startX) * progress
+                                translationY = card.startY
                             }
-                            OverlayMotion.RestoreMoveRight -> {
-                                // 向右退出，仅移动，不缩放不淡出
-                                val moveDistance = stageWidth.takeIf { it > 0f } ?: size.width
-                                translationX = overlayProgress * moveDistance
+                            OverlayMotion.FlyUp -> {
+                                val endY = -height * 1.1f
+                                translationX = card.startX
+                                translationY = card.startY + (endY - card.startY) * progress
                             }
-                            null -> Unit
+                            OverlayMotion.EnterFromLeft -> {
+                                translationX = -width * (1f - progress)
+                                translationY = 0f
+                            }
+                            OverlayMotion.EnterFromTop -> {
+                                translationX = 0f
+                                translationY = -height * (1f - progress)
+                            }
                         }
                     }
             )
