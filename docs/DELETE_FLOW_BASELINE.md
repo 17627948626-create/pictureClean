@@ -1,40 +1,63 @@
 # Delete Flow Baseline
 
-This document records the current stable baseline for the photo delete flow.
+本文档记录照片删除流程的业务底线。它的目标是防止动画、手势或权限改动再次破坏“上划加入待删除队列”这个核心路径。
 
-## Current status
+## 当前基线
 
-The app is back to a working baseline where swipe-up can queue photos for deletion on a real device.
+真机验证过的稳定基线：
 
-## Non-negotiable contract
+- 授权后照片可以正常加载。
+- 上划当前照片后，照片会立即进入待删除队列。
+- 待删除队列数量会立即反映到垃圾桶入口。
+- 进入确认页后，可以看到已加入队列的照片。
+- 确认删除时，系统删除弹窗会出现。
 
-Swipe-up delete is a business-state transition, not an animation result.
+## 不可破坏的业务契约
 
-When the UI accepts a swipe-up gesture, it must call `PhotoViewModel.swipeUp()` immediately. The queued photo must be added to `deleteQueue`, removed from `visiblePhotos`, and reflected in the trash badge without waiting for any animation to finish.
+上划删除是业务状态变化，动画只是视觉反馈。
 
-Animations may be added only as visual feedback around this state transition. They must not decide whether a photo enters the delete queue.
+当 UI 接受上划手势后，必须立即调用：
 
-## Minimal manual regression
+```kotlin
+PhotoViewModel.queueCurrentPhotoForDeletion()
+```
 
-Before changing gesture, permission, or delete code, verify this flow on a real device:
+调用后必须立刻满足：
 
-1. Fresh install.
-2. Grant photo permission.
-3. Confirm photos load.
-4. Swipe up one photo.
-5. Confirm the trash badge increments immediately.
-6. Open the trash page.
-7. Confirm the queued photo is listed.
-8. Start deletion.
-9. Confirm the system delete dialog appears.
-10. Confirm deletion and verify the photo disappears after refresh.
+- 当前照片加入 `deleteQueue`。
+- 当前照片从 `visiblePhotos` 移除。
+- `deleteQueueIds` 与 `deleteQueue` 同步。
+- 当前索引被钳制到新的可见列表范围内。
+- 垃圾桶数量立即更新。
 
-## Frozen areas
+动画可以围绕这次状态变化播放，但不能决定照片是否入队，也不能等动画结束后才入队。
 
-Do not reintroduce complex coordinated swipe animations until this baseline is protected by UI/instrumentation tests. The previous regression happened because the business call was executed after animation completion.
+## 手动回归清单
 
-## Deferred work
+修改手势、动画、权限、删除队列或 MediaStore 代码前后，都要真机验证：
 
-- Rebuild swipe animations on top of immediate queueing.
-- Validate MediaStore multi-volume support on real devices before changing URI construction again.
-- Add UI/instrumentation tests for swipe gesture acceptance and trash badge updates.
+1. Fresh install。
+2. 授权照片访问。
+3. 确认照片加载。
+4. 上划一张照片。
+5. 确认垃圾桶数量立即增加。
+6. 打开待删除确认页。
+7. 确认刚才上划的照片在列表中。
+8. 发起删除。
+9. 确认系统删除弹窗出现。
+10. 确认删除后，照片从应用列表中消失。
+
+## 动画改动红线
+
+可以继续优化滑动动画，但必须遵守：
+
+- 业务入队不能放到动画结束回调里。
+- 动画取消不能回滚已接受的删除动作。
+- 动画层可以保留旧照片做视觉飞出，但 ViewModel 状态必须已经更新。
+- 删除最后一张时，需要保证动画宿主不会在飞出动画完成前被提前卸载。
+
+## 后续工作
+
+- 为上划入队、垃圾桶计数、确认页列表增加 UI / instrumentation 测试。
+- 对 Android 多版本和不同相册权限模式做 MediaStore 删除回归。
+- 为“删除最后一张”增加专项真机回归用例。
