@@ -1,6 +1,7 @@
 package com.yihua.app.viewmodel
 
 import android.app.Application
+import android.app.RecoverableSecurityException
 import android.content.Context
 import android.content.IntentSender
 import android.content.SharedPreferences
@@ -30,6 +31,20 @@ data class DeleteHistoryEntry(
     val photo: Photo,
     val previousIndex: Int
 )
+
+sealed class DeleteResult {
+    object EmptyQueue : DeleteResult()
+    data class RequiresUserConfirmation(
+        val intentSender: IntentSender,
+        val completeOnResult: Boolean
+    ) : DeleteResult()
+    data class Success(val deletedCount: Int) : DeleteResult()
+    data class PartialFailure(
+        val deletedCount: Int,
+        val failedCount: Int
+    ) : DeleteResult()
+    data class Failure(val failedCount: Int) : DeleteResult()
+}
 
 data class PhotoUiState(
     val allPhotos: List<Photo> = emptyList(),
@@ -200,33 +215,84 @@ class PhotoViewModel(
         }
     }
 
-    fun createDeleteRequest(): IntentSender? {
+    fun requestDeleteQueuedPhotos(): DeleteResult {
         val queue = _uiState.value.deleteQueue
-        if (queue.isEmpty()) return null
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
+        if (queue.isEmpty()) return DeleteResult.EmptyQueue
 
-        return MediaStore.createDeleteRequest(
-            getApplication<Application>().contentResolver,
-            queue.map { it.uri }
-        ).intentSender
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            requestSystemDelete(queue)
+        } else {
+            deleteLegacyQueuedPhotos(queue)
+        }
     }
 
-    fun deleteDirectly(): Boolean {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) return false
+    private fun requestSystemDelete(queue: List<Photo>): DeleteResult {
+        return try {
+            DeleteResult.RequiresUserConfirmation(
+                intentSender = MediaStore.createDeleteRequest(
+                    getApplication<Application>().contentResolver,
+                    queue.map { it.uri }
+                ).intentSender,
+                completeOnResult = true
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create system delete request. count=${queue.size}, sdk=${Build.VERSION.SDK_INT}", e)
+            DeleteResult.Failure(queue.size)
+        }
+    }
 
-        val queue = _uiState.value.deleteQueue
-        var allSuccess = true
+    private fun deleteLegacyQueuedPhotos(queue: List<Photo>): DeleteResult {
+        val contentResolver = getApplication<Application>().contentResolver
+        val deletedIds = mutableSetOf<Long>()
+        val failedIds = mutableSetOf<Long>()
+
         for (photo in queue) {
             try {
-                getApplication<Application>().contentResolver.delete(photo.uri, null, null)
+                val deletedRows = contentResolver.delete(photo.uri, null, null)
+                if (deletedRows > 0) {
+                    deletedIds += photo.id
+                } else {
+                    Log.e(TAG, "Direct delete affected no rows. uri=${photo.uri}, sdk=${Build.VERSION.SDK_INT}")
+                    failedIds += photo.id
+                }
+            } catch (e: RecoverableSecurityException) {
+                Log.e(TAG, "Delete needs user confirmation. uri=${photo.uri}, sdk=${Build.VERSION.SDK_INT}", e)
+                if (deletedIds.isNotEmpty()) markPhotosDeleted(deletedIds)
+                return DeleteResult.RequiresUserConfirmation(
+                    intentSender = e.userAction.actionIntent.intentSender,
+                    completeOnResult = false
+                )
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to delete photo directly: ${photo.uri}", e)
-                allSuccess = false
+                Log.e(TAG, "Failed to delete photo directly. uri=${photo.uri}, sdk=${Build.VERSION.SDK_INT}", e)
+                failedIds += photo.id
             }
         }
 
-        if (allSuccess) onDeleteCompleted()
-        return allSuccess
+        return when {
+            deletedIds.size == queue.size -> {
+                onDeleteCompleted()
+                DeleteResult.Success(deletedIds.size)
+            }
+            deletedIds.isNotEmpty() -> {
+                markPhotosDeleted(deletedIds)
+                DeleteResult.PartialFailure(
+                    deletedCount = deletedIds.size,
+                    failedCount = failedIds.size
+                )
+            }
+            else -> DeleteResult.Failure(queue.size)
+        }
+    }
+
+    private fun markPhotosDeleted(deletedIds: Set<Long>) {
+        _uiState.update { state ->
+            state.copy(
+                allPhotos = state.allPhotos.filter { it.id !in deletedIds },
+                deleteQueue = state.deleteQueue.filter { it.id !in deletedIds },
+                deleteHistory = state.deleteHistory.filter { it.photo.id !in deletedIds }
+            ).recomputeDerivedState()
+        }
+        saveCurrentIndex(_uiState.value.currentIndex)
     }
 
     fun onDeleteCompleted() {
