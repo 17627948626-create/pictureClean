@@ -130,7 +130,6 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     // Keep test coroutines aligned with Kotlin 1.9.x project toolchain; coroutines 1.9.0 is built with Kotlin 2.0.
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.0")
-    testImplementation("io.mockk:mockk:1.13.12")
     testImplementation("org.robolectric:robolectric:4.12.2")
     testImplementation("androidx.test:core:1.6.1")
     testImplementation("androidx.test:core-ktx:1.6.1")
