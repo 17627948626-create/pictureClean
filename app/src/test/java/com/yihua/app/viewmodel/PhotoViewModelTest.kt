@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -24,6 +25,12 @@ import org.robolectric.annotation.Config
 
 private class FakePhotoDataSource(private val photos: List<Photo>) : PhotoDataSource {
     override suspend fun loadPhotos(): List<Photo> = photos
+}
+
+private class FailingPhotoDataSource : PhotoDataSource {
+    override suspend fun loadPhotos(): List<Photo> {
+        error("MediaStore read failed")
+    }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -59,6 +66,11 @@ class PhotoViewModelTest {
         return PhotoViewModel(app, FakePhotoDataSource(photos), prefs)
     }
 
+    private fun makeFailingViewModel(): PhotoViewModel {
+        val prefs = app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return PhotoViewModel(app, FailingPhotoDataSource(), prefs)
+    }
+
     @Test
     fun `loadPhotos sets currentPhoto to first photo`() {
         val photos = makePhotos(3)
@@ -72,6 +84,18 @@ class PhotoViewModelTest {
         val vm = makeViewModel(emptyList())
         vm.loadPhotos()
         assertEquals(PhotoListState.EmptyLibrary, vm.uiState.value.screenState)
+    }
+
+    @Test
+    fun `loadPhotos failure transitions to LoadFailed`() {
+        val vm = makeFailingViewModel()
+        vm.loadPhotos()
+        val state = vm.uiState.value
+        assertEquals(PhotoListState.LoadFailed, state.screenState)
+        assertTrue(state.allPhotos.isEmpty())
+        assertTrue(state.visiblePhotos.isEmpty())
+        assertTrue(state.deleteQueue.isEmpty())
+        assertNotNull(state.errorMessage)
     }
 
     @Test
