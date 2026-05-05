@@ -3,6 +3,7 @@ package com.yihua.app.data
 import android.content.ContentUris
 import android.content.Context
 import android.provider.MediaStore
+import com.yihua.app.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -38,7 +39,7 @@ class PhotoRepository(private val context: Context) : PhotoDataSource {
 
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idColumn)
-                val name = cursor.getString(nameColumn) ?: "未知"
+                val name = cursor.getString(nameColumn) ?: context.getString(R.string.unknown_photo_name)
                 val date = cursor.getLong(dateColumn)
                 val size = cursor.getLong(sizeColumn)
                 val uri = ContentUris.withAppendedId(collection, id)

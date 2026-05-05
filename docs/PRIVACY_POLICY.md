@@ -70,4 +70,4 @@
 
 ## Google Play 上架说明
 
-Google Play Console 需要填写一个公网可访问的隐私政策 URL。发布前必须将本隐私政策发布到公网地址，并在 Play Console 中填写同一个 URL。
+发布前必须将本隐私政策发布到公网地址。

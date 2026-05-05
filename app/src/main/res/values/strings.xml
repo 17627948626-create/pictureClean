@@ -1,6 +1,43 @@
 <resources>
     <string name="app_name">一划</string>
-    <string name="permission_rationale">一划需要访问您的照片，才能帮您整理相册。</string>
-    <string name="grant_permission">授权访问</string>
-    <string name="no_photos">没有找到照片</string>
+    <string name="unknown_photo_name">未知</string>
+    <string name="permission_screen_title">一划 · 相册瘦身</string>
+    <string name="permission_rationale">一划需要读取您的照片，才能帮您整理相册。</string>
+    <string name="permission_initial_request">请在弹窗中授权访问相册，让一划帮您轻松整理照片。</string>
+    <string name="permission_denied_message">相册权限未开启。一划只能在您授权后读取并整理照片。</string>
+    <string name="permission_grant">授权访问</string>
+    <string name="permission_retry">重新申请授权</string>
+    <string name="permission_open_settings">打开系统设置</string>
+    <string name="partial_access_banner">仅显示已授权的照片，如需完整相册请在系统设置中授权</string>
+
+    <string name="back">返回</string>
+    <string name="cancel">取消</string>
+    <string name="ok">知道了</string>
+    <string name="retry">重试</string>
+
+    <string name="load_failed_title">照片加载失败</string>
+    <string name="load_failed_message">照片加载失败，请检查相册权限后重试。</string>
+    <string name="empty_library_title">相册已整理完毕！</string>
+    <string name="all_queued_title">所有照片已加入待删除队列</string>
+    <string name="all_queued_message">共 %1$d 张，确认后将永久删除</string>
+    <string name="go_to_delete_confirm">前往确认删除</string>
+    <string name="delete_queue_content_description">待删除列表</string>
+
+    <string name="delete_confirm_title">待删除照片（%1$d 张）</string>
+    <string name="delete_confirm_dialog_title">确认删除？</string>
+    <string name="delete_confirm_dialog_message">将永久删除 %1$d 张照片，此操作不可恢复。</string>
+    <string name="delete_confirm_action">确认删除</string>
+    <string name="delete_button">删除 %1$d 张照片</string>
+    <string name="empty_delete_queue_title">没有待删除的照片</string>
+    <string name="remove_from_delete_queue">从队列移除</string>
+    <string name="delete_empty_queue_title">没有待删除照片</string>
+    <string name="delete_empty_queue_message">待删除队列为空。</string>
+    <string name="delete_cancelled_title">已取消删除</string>
+    <string name="delete_cancelled_message">照片未被删除，待删除队列已保留。</string>
+    <string name="delete_request_failed_title">无法发起删除请求</string>
+    <string name="delete_request_failed_message">无法发起系统删除请求，请重试。待删除队列已保留。</string>
+    <string name="delete_failed_title">删除失败</string>
+    <string name="delete_failed_message">照片删除失败，请检查权限后重试。待删除队列已保留。</string>
+    <string name="delete_partial_failure_title">部分照片删除失败</string>
+    <string name="delete_partial_failure_message">已删除 %1$d 张，%2$d 张删除失败，失败照片仍保留在待删除队列。</string>
 </resources>

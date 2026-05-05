@@ -62,15 +62,19 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import coil.size.Precision
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
+import com.yihua.app.R
 import com.yihua.app.data.Photo
 import com.yihua.app.ui.theme.AppleSystemGray6
 import com.yihua.app.ui.theme.LightGrayText
@@ -93,18 +97,12 @@ private const val DirectionRatio = 1.15f
 
 private enum class GestureDirection { Left, Right, Up, Down }
 
-private enum class CardMotion {
-    FlyToLeft,
-    FlyToTop,
-    CoverFromLeft,
-    CoverFromTop
-}
-
 private data class AnimatedCard(
     val photo: Photo,
     val motion: CardMotion,
     val startX: Float = 0f,
-    val startY: Float = 0f
+    val startY: Float = 0f,
+    val startScale: Float = 1f
 )
 
 @OptIn(ExperimentalPermissionsApi::class)
@@ -163,23 +161,23 @@ fun PhotoSwipeScreen(
             isPartialAccess = hasPartialAccess && !hasFullAccess
         )
         permsState.shouldShowRationale -> PermissionScreen(
-            message = "一划需要读取您的照片，才能帮您整理相册。",
-            buttonText = "授权访问",
+            message = stringResource(R.string.permission_rationale),
+            buttonText = stringResource(R.string.permission_grant),
             onRequest = ::requestPermissions
         )
         !hasRequestedPermissions -> {
             LaunchedEffect(Unit) { requestPermissions() }
             PermissionScreen(
-                message = "请在弹窗中授权访问相册，让一划帮您轻松整理照片。",
-                buttonText = "授权访问",
+                message = stringResource(R.string.permission_initial_request),
+                buttonText = stringResource(R.string.permission_grant),
                 onRequest = ::requestPermissions
             )
         }
         else -> PermissionScreen(
-            message = "相册权限未开启。一划只能在您授权后读取并整理照片。",
-            buttonText = "重新申请授权",
+            message = stringResource(R.string.permission_denied_message),
+            buttonText = stringResource(R.string.permission_retry),
             onRequest = ::requestPermissions,
-            settingsButtonText = "打开系统设置",
+            settingsButtonText = stringResource(R.string.permission_open_settings),
             onOpenSettings = ::openAppSettings
         )
     }
@@ -206,7 +204,7 @@ private fun PermissionScreen(
             Text(text = "📷", fontSize = 64.sp)
             Spacer(Modifier.height(24.dp))
             Text(
-                text = "一划 · 相册瘦身",
+                text = stringResource(R.string.permission_screen_title),
                 color = Color(0xFF1C1C1E),
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold
@@ -276,7 +274,7 @@ private fun PhotoContent(
             }
 
             state.screenState == PhotoListState.LoadFailed -> LoadFailedState(
-                message = state.errorMessage ?: "照片加载失败，请检查相册权限后重试。",
+                message = state.errorMessage ?: stringResource(R.string.load_failed_message),
                 onRetry = viewModel::loadPhotos
             )
 
@@ -347,7 +345,7 @@ private fun EmptyLibraryState() {
             Text("🎉", fontSize = 64.sp)
             Spacer(Modifier.height(16.dp))
             Text(
-                "相册已整理完毕！",
+                stringResource(R.string.empty_library_title),
                 color = Color(0xFF1C1C1E),
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Medium
@@ -369,7 +367,7 @@ private fun LoadFailedState(
             Text("⚠️", fontSize = 56.sp)
             Spacer(Modifier.height(16.dp))
             Text(
-                "照片加载失败",
+                stringResource(R.string.load_failed_title),
                 color = Color(0xFF1C1C1E),
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Medium
@@ -389,7 +387,7 @@ private fun LoadFailedState(
                     contentColor = Color.White
                 )
             ) {
-                Text("重试", fontWeight = FontWeight.Medium)
+                Text(stringResource(R.string.retry), fontWeight = FontWeight.Medium)
             }
         }
     }
@@ -408,7 +406,7 @@ private fun AllQueuedForDeleteState(
             Text("🗑️", fontSize = 64.sp)
             Spacer(Modifier.height(16.dp))
             Text(
-                "所有照片已加入待删除队列",
+                stringResource(R.string.all_queued_title),
                 color = Color(0xFF1C1C1E),
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Medium,
@@ -416,7 +414,7 @@ private fun AllQueuedForDeleteState(
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                "共 $deleteQueueSize 张，确认后将永久删除",
+                stringResource(R.string.all_queued_message, deleteQueueSize),
                 color = LightGrayText,
                 fontSize = 14.sp,
                 textAlign = TextAlign.Center
@@ -428,7 +426,7 @@ private fun AllQueuedForDeleteState(
             ) {
                 Icon(Icons.Default.Delete, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("前往确认删除", fontWeight = FontWeight.Medium)
+                Text(stringResource(R.string.go_to_delete_confirm), fontWeight = FontWeight.Medium)
             }
         }
     }
@@ -443,7 +441,7 @@ private fun PartialAccessBanner() {
             .padding(horizontal = 16.dp, vertical = 6.dp)
     ) {
         Text(
-            text = "仅显示已授权的照片，如需完整相册请在系统设置中授权",
+            text = stringResource(R.string.partial_access_banner),
             color = Color(0xFF856404),
             fontSize = 12.sp
         )
@@ -544,6 +542,7 @@ private fun ColumnScope.SwipeStage(
         motion: CardMotion,
         startX: Float,
         startY: Float,
+        startScale: Float = 1f,
         updateState: () -> Unit
     ) {
         scope.launch {
@@ -555,7 +554,8 @@ private fun ColumnScope.SwipeStage(
                     photo = photo,
                     motion = motion,
                     startX = startX,
-                    startY = startY
+                    startY = startY,
+                    startScale = startScale
                 )
                 updateState()
                 resetGesture()
@@ -656,14 +656,25 @@ private fun ColumnScope.SwipeStage(
 
                         when (gestureDirection) {
                             GestureDirection.Left -> {
-                                dragX = if (state.currentIndex < state.visiblePhotos.lastIndex) totalX.coerceAtMost(0f) else 0f
+                                dragX = if (state.currentIndex < state.visiblePhotos.lastIndex) {
+                                    totalX.coerceAtMost(0f)
+                                } else {
+                                    edgeResistedDrag(totalX.coerceAtMost(0f))
+                                }
+                                dragY = 0f
+                            }
+                            GestureDirection.Right -> {
+                                dragX = if (state.currentIndex > 0) {
+                                    totalX.coerceAtLeast(0f)
+                                } else {
+                                    edgeResistedDrag(totalX.coerceAtLeast(0f))
+                                }
                                 dragY = 0f
                             }
                             GestureDirection.Up -> {
                                 dragX = 0f
                                 dragY = totalY.coerceAtMost(0f)
                             }
-                            GestureDirection.Right,
                             GestureDirection.Down,
                             null -> {
                                 dragX = 0f
@@ -720,6 +731,7 @@ private fun ColumnScope.SwipeStage(
                                         motion = CardMotion.FlyToTop,
                                         startX = 0f,
                                         startY = dragY,
+                                        startScale = deletePreviewScale(dragY),
                                         updateState = onQueueCurrentPhotoForDeletion
                                     )
                                 } else {
@@ -750,8 +762,7 @@ private fun ColumnScope.SwipeStage(
         contentAlignment = Alignment.Center
     ) {
         val basePhoto = basePhotoDuringCoverIn ?: state.currentPhoto
-        val deletePreviewProgress = (-dragY.coerceAtMost(0f) / 220f).coerceIn(0f, 1f)
-        val currentScale = 1f - deletePreviewProgress * 0.15f
+        val currentScale = deletePreviewScale(dragY)
 
         basePhoto?.let { photo ->
             PhotoCard(
@@ -775,26 +786,19 @@ private fun ColumnScope.SwipeStage(
                     .graphicsLayer {
                         val width = stageWidth.takeIf { it > 0f } ?: size.width
                         val height = stageHeight.takeIf { it > 0f } ?: size.height
-                        when (card.motion) {
-                            CardMotion.FlyToLeft -> {
-                                val endX = -width * 1.1f
-                                translationX = card.startX + (endX - card.startX) * progress.value
-                                translationY = card.startY
-                            }
-                            CardMotion.FlyToTop -> {
-                                val endY = -height * 1.1f
-                                translationX = card.startX
-                                translationY = card.startY + (endY - card.startY) * progress.value
-                            }
-                            CardMotion.CoverFromLeft -> {
-                                translationX = -width * (1f - progress.value)
-                                translationY = 0f
-                            }
-                            CardMotion.CoverFromTop -> {
-                                translationX = 0f
-                                translationY = -height * (1f - progress.value)
-                            }
-                        }
+                        val transform = flyOutTransform(
+                            motion = card.motion,
+                            progress = progress.value,
+                            width = width,
+                            height = height,
+                            startX = card.startX,
+                            startY = card.startY,
+                            startScale = card.startScale
+                        )
+                        translationX = transform.translationX
+                        translationY = transform.translationY
+                        scaleX = transform.scale
+                        scaleY = transform.scale
                     }
             )
         }
@@ -830,7 +834,7 @@ private fun TopBar(
             IconButton(onClick = onTrashClick) {
                 Icon(
                     Icons.Default.Delete,
-                    contentDescription = "待删除列表",
+                    contentDescription = stringResource(R.string.delete_queue_content_description),
                     tint = if (deleteQueueSize > 0) TrashBadgeColor else LightGrayText
                 )
             }
@@ -860,6 +864,9 @@ private fun PhotoCard(
     photo: Photo,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val requestOptions = photoImageRequestOptions()
+
     Box(
         modifier = modifier
             .shadow(4.dp, RoundedCornerShape(16.dp))
@@ -867,7 +874,15 @@ private fun PhotoCard(
             .background(Color.White)
     ) {
         AsyncImage(
-            model = photo.uri,
+            model = ImageRequest.Builder(context)
+                .data(photo.uri)
+                .memoryCacheKey("${requestOptions.memoryCacheKeyPrefix}-${photo.id}")
+                .diskCacheKey("${requestOptions.memoryCacheKeyPrefix}-${photo.id}")
+                .allowHardware(requestOptions.allowHardware)
+                .precision(if (requestOptions.precisionInexact) Precision.INEXACT else Precision.EXACT)
+                .scale(requestOptions.scale)
+                .size(1440, 2560)
+                .build(),
             contentDescription = photo.displayName,
             contentScale = ContentScale.Fit,
             modifier = Modifier
@@ -915,6 +930,8 @@ private fun ThumbnailStrip(
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
+    val context = LocalContext.current
+    val requestOptions = photoImageRequestOptions()
 
     LaunchedEffect(currentIndex) {
         val targetIndex = maxOf(0, currentIndex - 3)
@@ -933,7 +950,15 @@ private fun ThumbnailStrip(
         itemsIndexed(photos) { index, photo ->
             val isSelected = index == currentIndex
             AsyncImage(
-                model = photo.uri,
+                model = ImageRequest.Builder(context)
+                    .data(photo.uri)
+                    .memoryCacheKey("${requestOptions.memoryCacheKeyPrefix}-thumb-${photo.id}")
+                    .diskCacheKey("${requestOptions.memoryCacheKeyPrefix}-thumb-${photo.id}")
+                    .allowHardware(requestOptions.allowHardware)
+                    .precision(if (requestOptions.precisionInexact) Precision.INEXACT else Precision.EXACT)
+                    .scale(requestOptions.scale)
+                    .size(128, 128)
+                    .build(),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier

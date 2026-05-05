@@ -11,6 +11,7 @@ import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.yihua.app.R
 import com.yihua.app.data.Photo
 import com.yihua.app.data.PhotoDataSource
 import com.yihua.app.data.PhotoRepository
@@ -46,6 +47,11 @@ sealed class DeleteResult {
     ) : DeleteResult()
     data class Failure(val failedCount: Int) : DeleteResult()
 }
+
+data class DirectDeleteOutcome(
+    val deleteResult: DeleteResult,
+    val state: PhotoUiState
+)
 
 data class PhotoUiState(
     val allPhotos: List<Photo> = emptyList(),
@@ -100,7 +106,32 @@ class PhotoViewModel(
         private const val PREFS_NAME = "yihua_prefs"
         private const val KEY_CURRENT_INDEX = "current_index"
         private const val TAG = "PhotoViewModel"
-        private const val LOAD_FAILED_MESSAGE = "照片加载失败，请检查相册权限后重试。"
+
+        internal fun applyDirectDeleteOutcome(
+            state: PhotoUiState,
+            deletedIds: Set<Long>
+        ): DirectDeleteOutcome {
+            val queuedIds = state.deleteQueue.map { it.id }.toSet()
+            val failedIds = queuedIds - deletedIds
+            val nextState = when {
+                deletedIds.isEmpty() -> state.recomputeDerivedState()
+                else -> state.copy(
+                    allPhotos = state.allPhotos.filter { it.id !in deletedIds },
+                    deleteQueue = state.deleteQueue.filter { it.id !in deletedIds },
+                    deleteHistory = state.deleteHistory.filter { it.photo.id !in deletedIds }
+                ).recomputeDerivedState()
+            }
+            val result = when {
+                state.deleteQueue.isEmpty() -> DeleteResult.EmptyQueue
+                deletedIds.size == state.deleteQueue.size -> DeleteResult.Success(deletedIds.size)
+                deletedIds.isNotEmpty() -> DeleteResult.PartialFailure(
+                    deletedCount = deletedIds.size,
+                    failedCount = failedIds.size
+                )
+                else -> DeleteResult.Failure(state.deleteQueue.size)
+            }
+            return DirectDeleteOutcome(deleteResult = result, state = nextState)
+        }
     }
 
     private val _uiState = MutableStateFlow(PhotoUiState())
@@ -143,7 +174,7 @@ class PhotoViewModel(
                         deleteQueueIds = emptySet(),
                         deleteHistory = emptyList(),
                         screenState = PhotoListState.LoadFailed,
-                        errorMessage = LOAD_FAILED_MESSAGE
+                        errorMessage = getApplication<Application>().getString(R.string.load_failed_message)
                     )
                 }
             }
@@ -302,20 +333,15 @@ class PhotoViewModel(
         deletedIds: Set<Long>,
         failedIds: Set<Long>
     ): DeleteResult {
-        return when {
-            deletedIds.size == queue.size -> {
-                onDeleteCompleted()
-                DeleteResult.Success(deletedIds.size)
-            }
-            deletedIds.isNotEmpty() -> {
-                markPhotosDeleted(deletedIds)
-                DeleteResult.PartialFailure(
-                    deletedCount = deletedIds.size,
-                    failedCount = failedIds.size
-                )
-            }
-            else -> DeleteResult.Failure(queue.size)
+        if (failedIds.isEmpty() && deletedIds.size == queue.size) {
+            onDeleteCompleted()
+            return DeleteResult.Success(deletedIds.size)
         }
+
+        val outcome = applyDirectDeleteOutcome(_uiState.value, deletedIds)
+        _uiState.value = outcome.state
+        saveCurrentIndex(_uiState.value.currentIndex)
+        return outcome.deleteResult
     }
 
     private fun markPhotosDeleted(deletedIds: Set<Long>) {

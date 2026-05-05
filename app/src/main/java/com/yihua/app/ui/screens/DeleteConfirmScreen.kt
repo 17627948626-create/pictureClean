@@ -50,12 +50,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import coil.size.Precision
+import com.yihua.app.R
 import com.yihua.app.data.Photo
 import com.yihua.app.ui.theme.AppleSystemGray6
 import com.yihua.app.ui.theme.LightGrayText
@@ -79,6 +84,7 @@ fun DeleteConfirmScreen(
     viewModel: PhotoViewModel,
     onNavigateBack: () -> Unit
 ) {
+    val context = LocalContext.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var dialogState by remember { mutableStateOf(DeleteDialogState.None) }
     var partialFailureMessage by remember { mutableStateOf("") }
@@ -90,7 +96,11 @@ fun DeleteConfirmScreen(
             is DeleteResult.RequiresUserConfirmation -> dialogState = DeleteDialogState.RequestFailed
             is DeleteResult.Success -> onNavigateBack()
             is DeleteResult.PartialFailure -> {
-                partialFailureMessage = "已删除 ${result.deletedCount} 张，${result.failedCount} 张删除失败，失败照片仍保留在待删除队列。"
+                partialFailureMessage = context.resources.getString(
+                    R.string.delete_partial_failure_message,
+                    result.deletedCount,
+                    result.failedCount
+                )
                 dialogState = DeleteDialogState.PartialFailure
             }
             is DeleteResult.Failure -> dialogState = DeleteDialogState.DeleteFailed
@@ -131,7 +141,11 @@ fun DeleteConfirmScreen(
             }
             is DeleteResult.Success -> onNavigateBack()
             is DeleteResult.PartialFailure -> {
-                partialFailureMessage = "已删除 ${result.deletedCount} 张，${result.failedCount} 张删除失败，失败照片仍保留在待删除队列。"
+                partialFailureMessage = context.resources.getString(
+                    R.string.delete_partial_failure_message,
+                    result.deletedCount,
+                    result.failedCount
+                )
                 dialogState = DeleteDialogState.PartialFailure
             }
             is DeleteResult.Failure -> dialogState = DeleteDialogState.DeleteFailed
@@ -143,7 +157,7 @@ fun DeleteConfirmScreen(
             TopAppBar(
                 title = {
                     Text(
-                        "待删除照片（${state.deleteQueue.size} 张）",
+                        stringResource(R.string.delete_confirm_title, state.deleteQueue.size),
                         fontWeight = FontWeight.Medium
                     )
                 },
@@ -151,7 +165,7 @@ fun DeleteConfirmScreen(
                     IconButton(onClick = onNavigateBack) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "返回"
+                            contentDescription = stringResource(R.string.back)
                         )
                     }
                 },
@@ -203,27 +217,27 @@ fun DeleteConfirmScreen(
             }
         )
         DeleteDialogState.EmptyQueue -> InfoDialog(
-            title = "没有待删除照片",
-            message = "待删除队列为空。",
+            title = stringResource(R.string.delete_empty_queue_title),
+            message = stringResource(R.string.delete_empty_queue_message),
             onDismiss = { dialogState = DeleteDialogState.None }
         )
         DeleteDialogState.Cancelled -> InfoDialog(
-            title = "已取消删除",
-            message = "照片未被删除，待删除队列已保留。",
+            title = stringResource(R.string.delete_cancelled_title),
+            message = stringResource(R.string.delete_cancelled_message),
             onDismiss = { dialogState = DeleteDialogState.None }
         )
         DeleteDialogState.RequestFailed -> InfoDialog(
-            title = "无法发起删除请求",
-            message = "无法发起系统删除请求，请重试。待删除队列已保留。",
+            title = stringResource(R.string.delete_request_failed_title),
+            message = stringResource(R.string.delete_request_failed_message),
             onDismiss = { dialogState = DeleteDialogState.None }
         )
         DeleteDialogState.DeleteFailed -> InfoDialog(
-            title = "删除失败",
-            message = "照片删除失败，请检查权限后重试。待删除队列已保留。",
+            title = stringResource(R.string.delete_failed_title),
+            message = stringResource(R.string.delete_failed_message),
             onDismiss = { dialogState = DeleteDialogState.None }
         )
         DeleteDialogState.PartialFailure -> InfoDialog(
-            title = "部分照片删除失败",
+            title = stringResource(R.string.delete_partial_failure_title),
             message = partialFailureMessage,
             onDismiss = { dialogState = DeleteDialogState.None }
         )
@@ -246,10 +260,10 @@ private fun ConfirmDeleteDialog(
                 modifier = Modifier.size(32.dp)
             )
         },
-        title = { Text("确认删除？", fontWeight = FontWeight.Bold) },
+        title = { Text(stringResource(R.string.delete_confirm_dialog_title), fontWeight = FontWeight.Bold) },
         text = {
             Text(
-                "将永久删除 $count 张照片，此操作不可恢复。",
+                stringResource(R.string.delete_confirm_dialog_message, count),
                 textAlign = TextAlign.Center
             )
         },
@@ -258,11 +272,11 @@ private fun ConfirmDeleteDialog(
                 onClick = onConfirm,
                 colors = ButtonDefaults.buttonColors(containerColor = SwipeUpColor)
             ) {
-                Text("确认删除", color = Color.White)
+                Text(stringResource(R.string.delete_confirm_action), color = Color.White)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
         }
     )
 }
@@ -278,7 +292,7 @@ private fun InfoDialog(
         title = { Text(title, fontWeight = FontWeight.Bold) },
         text = { Text(message) },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("知道了") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.ok)) }
         }
     )
 }
@@ -308,7 +322,7 @@ private fun BottomDeleteBar(
                 Icon(Icons.Default.Delete, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    "删除 $count 张照片",
+                    stringResource(R.string.delete_button, count),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium
                 )
@@ -327,7 +341,7 @@ private fun EmptyQueueContent(modifier: Modifier = Modifier) {
             Text("🎉", fontSize = 56.sp)
             Spacer(Modifier.height(16.dp))
             Text(
-                "没有待删除的照片",
+                stringResource(R.string.empty_delete_queue_title),
                 style = MaterialTheme.typography.titleMedium,
                 color = LightGrayText
             )
@@ -362,13 +376,24 @@ private fun PhotoThumbnailItem(
     photo: Photo,
     onRemove: () -> Unit
 ) {
+    val context = LocalContext.current
+    val requestOptions = photoImageRequestOptions()
+
     Box(
         modifier = Modifier
             .aspectRatio(1f)
             .clip(RoundedCornerShape(4.dp))
     ) {
         AsyncImage(
-            model = photo.uri,
+            model = ImageRequest.Builder(context)
+                .data(photo.uri)
+                .memoryCacheKey("${requestOptions.memoryCacheKeyPrefix}-confirm-${photo.id}")
+                .diskCacheKey("${requestOptions.memoryCacheKeyPrefix}-confirm-${photo.id}")
+                .allowHardware(requestOptions.allowHardware)
+                .precision(if (requestOptions.precisionInexact) Precision.INEXACT else Precision.EXACT)
+                .scale(requestOptions.scale)
+                .size(256, 256)
+                .build(),
             contentDescription = photo.displayName,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize()
@@ -387,7 +412,7 @@ private fun PhotoThumbnailItem(
             ) {
                 Icon(
                     Icons.Default.Close,
-                    contentDescription = "从队列移除",
+                    contentDescription = stringResource(R.string.remove_from_delete_queue),
                     tint = Color.White,
                     modifier = Modifier.size(16.dp)
                 )
