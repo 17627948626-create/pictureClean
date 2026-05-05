@@ -1,6 +1,9 @@
 package com.yihua.app.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -39,6 +42,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -57,6 +61,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -108,6 +113,8 @@ fun PhotoSwipeScreen(
     viewModel: PhotoViewModel,
     onNavigateToConfirm: () -> Unit
 ) {
+    val context = LocalContext.current
+    var hasRequestedPermissions by remember { mutableStateOf(false) }
     val permissionsList = remember {
         when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> listOf(
@@ -133,6 +140,18 @@ fun PhotoSwipeScreen(
     }
     val hasAnyAccess = hasFullAccess || hasPartialAccess
 
+    fun requestPermissions() {
+        hasRequestedPermissions = true
+        permsState.launchMultiplePermissionRequest()
+    }
+
+    fun openAppSettings() {
+        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = Uri.fromParts("package", context.packageName, null)
+        }
+        context.startActivity(intent)
+    }
+
     LaunchedEffect(hasAnyAccess) {
         if (hasAnyAccess) viewModel.loadPhotos()
     }
@@ -146,16 +165,23 @@ fun PhotoSwipeScreen(
         permsState.shouldShowRationale -> PermissionScreen(
             message = "一划需要读取您的照片，才能帮您整理相册。",
             buttonText = "授权访问",
-            onRequest = { permsState.launchMultiplePermissionRequest() }
+            onRequest = ::requestPermissions
         )
-        else -> {
-            LaunchedEffect(Unit) { permsState.launchMultiplePermissionRequest() }
+        !hasRequestedPermissions -> {
+            LaunchedEffect(Unit) { requestPermissions() }
             PermissionScreen(
                 message = "请在弹窗中授权访问相册，让一划帮您轻松整理照片。",
-                buttonText = "重新申请授权",
-                onRequest = { permsState.launchMultiplePermissionRequest() }
+                buttonText = "授权访问",
+                onRequest = ::requestPermissions
             )
         }
+        else -> PermissionScreen(
+            message = "相册权限未开启。一划只能在您授权后读取并整理照片。",
+            buttonText = "重新申请授权",
+            onRequest = ::requestPermissions,
+            settingsButtonText = "打开系统设置",
+            onOpenSettings = ::openAppSettings
+        )
     }
 }
 
@@ -163,7 +189,9 @@ fun PhotoSwipeScreen(
 private fun PermissionScreen(
     message: String,
     buttonText: String,
-    onRequest: () -> Unit
+    onRequest: () -> Unit,
+    settingsButtonText: String? = null,
+    onOpenSettings: (() -> Unit)? = null
 ) {
     Box(
         modifier = Modifier
@@ -200,6 +228,15 @@ private fun PermissionScreen(
                 )
             ) {
                 Text(buttonText, fontWeight = FontWeight.Medium)
+            }
+            if (settingsButtonText != null && onOpenSettings != null) {
+                Spacer(Modifier.height(12.dp))
+                OutlinedButton(
+                    onClick = onOpenSettings,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(settingsButtonText, fontWeight = FontWeight.Medium)
+                }
             }
         }
     }
