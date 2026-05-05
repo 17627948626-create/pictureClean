@@ -227,6 +227,7 @@ class PhotoViewModel(
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.R)
     private fun requestSystemDelete(queue: List<Photo>): DeleteResult {
         return try {
             DeleteResult.RequiresUserConfirmation(
