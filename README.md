@@ -19,23 +19,18 @@ Android 照片快速清理 App。核心目标是让用户用最少的动作完�
 - 动画可以保留旧照片做视觉飞出，但不能决定照片是否入队，也不能等动画结束后才入队。
 - 照片加载失败必须进入 `LoadFailed`，不能永久停在 Loading，也不能伪装成空相册。
 
-## 当前验证状态
+## 上架门禁
 
-已做代码层修复：
+唯一 P0 上架门禁来源：`docs/RELEASE_BLOCKERS_REVIEW.md`。
 
-1. 回弹动画等待 X/Y 两个方向都结束后，再释放手势锁。
-2. 删除最后一张时，保活动画宿主，等飞出动画完整播放后再切到空状态。
-3. `loadPhotos()` 已加异常处理，失败时进入 `LoadFailed`，显示重试入口，并有单测覆盖 repository 抛异常。
-4. 仓库内已补充隐私政策材料：`docs/PRIVACY_POLICY.md`。
+README 不维护另一套 P0 判断口径。任何阻止上架、核心功能不可用、照片数据安全、权限、隐私、Release 验证相关问题，都必须落到 `docs/RELEASE_BLOCKERS_REVIEW.md`。
 
-正式上架前仍需确认：
+当前上架前必须按该文档逐项确认：
 
-- APK 构建成功。
-- 真机回归通过。
+- P0 全部关闭。
 - 隐私政策已发布到公网 URL，并填入 Google Play Console。
-- Android 10 删除路径仍需单独处理 `RecoverableSecurityException`，当前不视为已关闭。
-
-详细动画规格和回归验收标准见：`docs/SWIPE_ANIMATION_V2.md`。
+- Release 包构建成功，并完成真机回归。
+- 删除行为在目标 Android 版本上真实、安全、可解释。
 
 ## 最小真机回归
 
@@ -87,7 +82,8 @@ Release APK 签名需要配置以下 GitHub Actions secrets：
 
 | 文档 | 用途 |
 |------|------|
-| `README.md` | 项目当前真相、验证状态、回归清单、构建入口 |
+| `README.md` | 项目入口、当前真相、回归清单、构建入口 |
+| `docs/RELEASE_BLOCKERS_REVIEW.md` | 唯一 P0 上架门禁清单；所有发布阻断问题必须落到这里 |
 | `docs/SWIPE_ANIMATION_V2.md` | 当前滑动交互和动画详细规格 |
 | `docs/PRIVACY_POLICY.md` | 隐私政策上架材料；发布前必须同步到公网 URL |
 
