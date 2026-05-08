@@ -64,7 +64,7 @@ internal fun flyOutTransform(
             )
         }
         CardMotion.CoverFromLeft -> SwipeTransform(
-            translationX = -width * (1f - clampedProgress),
+            translationX = startX * (1f - clampedProgress),
             translationY = 0f,
             scale = 1f
         )

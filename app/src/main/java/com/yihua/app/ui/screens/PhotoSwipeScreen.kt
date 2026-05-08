@@ -55,6 +55,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -470,6 +471,7 @@ private fun ColumnScope.SwipeStage(
     var stageHeight by remember { mutableFloatStateOf(0f) }
     var animatedCard by remember { mutableStateOf<AnimatedCard?>(null) }
     var basePhotoDuringCoverIn by remember { mutableStateOf<Photo?>(null) }
+    var entryX by remember { mutableFloatStateOf(0f) }
 
     fun setAnimationRunning(value: Boolean) {
         animationRunning = value
@@ -558,15 +560,35 @@ private fun ColumnScope.SwipeStage(
                     startScale = startScale
                 )
                 updateState()
+                val newEntryX = if (motion == CardMotion.FlyToLeft) stageWidth + startX else 0f
+                entryX = newEntryX
                 resetGesture()
-                progress.animateTo(
-                    targetValue = 1f,
-                    animationSpec = tween(
-                        durationMillis = 150,
-                        easing = FastOutLinearInEasing
+                val progressJob = launch {
+                    progress.animateTo(
+                        targetValue = 1f,
+                        animationSpec = tween(
+                            durationMillis = 150,
+                            easing = FastOutLinearInEasing
+                        )
                     )
-                )
+                }
+                if (newEntryX != 0f) {
+                    val entryAnim = Animatable(newEntryX)
+                    val entryJob = launch {
+                        entryAnim.animateTo(
+                            targetValue = 0f,
+                            animationSpec = tween(
+                                durationMillis = 150,
+                                easing = FastOutLinearInEasing
+                            )
+                        ) { entryX = value }
+                    }
+                    joinAll(progressJob, entryJob)
+                } else {
+                    progressJob.join()
+                }
             } finally {
+                entryX = 0f
                 resetGesture()
                 resetAnimationState()
                 progress.snapTo(0f)
@@ -579,6 +601,7 @@ private fun ColumnScope.SwipeStage(
         incomingPhoto: Photo,
         currentPhoto: Photo?,
         motion: CardMotion,
+        startX: Float = 0f,
         updateState: () -> Boolean
     ) {
         scope.launch {
@@ -587,7 +610,7 @@ private fun ColumnScope.SwipeStage(
             try {
                 progress.snapTo(0f)
                 basePhotoDuringCoverIn = currentPhoto
-                animatedCard = AnimatedCard(photo = incomingPhoto, motion = motion)
+                animatedCard = AnimatedCard(photo = incomingPhoto, motion = motion, startX = startX)
                 val updated = updateState()
                 if (updated) {
                     resetGesture()
@@ -621,6 +644,7 @@ private fun ColumnScope.SwipeStage(
             .fillMaxWidth()
             .weight(1f)
             .padding(horizontal = 16.dp, vertical = 8.dp)
+            .clipToBounds()
             .onSizeChanged {
                 stageWidth = it.width.toFloat()
                 stageHeight = it.height.toFloat()
@@ -714,6 +738,7 @@ private fun ColumnScope.SwipeStage(
                                         incomingPhoto = previousPhoto,
                                         currentPhoto = currentPhoto,
                                         motion = CardMotion.CoverFromLeft,
+                                        startX = -stageWidth + dragX,
                                         updateState = {
                                             onGoToPreviousPhoto()
                                             true
@@ -764,13 +789,30 @@ private fun ColumnScope.SwipeStage(
         val basePhoto = basePhotoDuringCoverIn ?: state.currentPhoto
         val currentScale = deletePreviewScale(dragY)
 
+        // Neighbor card — renders behind current card to give real-time follow-finger feedback
+        val neighborPhoto = when (gestureDirection) {
+            GestureDirection.Left -> state.visiblePhotos.getOrNull(state.currentIndex + 1)
+            GestureDirection.Right -> state.visiblePhotos.getOrNull(state.currentIndex - 1)
+            else -> null
+        }.takeIf { !animationRunning }
+        neighborPhoto?.let { photo ->
+            PhotoCard(
+                photo = photo,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        translationX = if (dragX < 0) stageWidth + dragX else -stageWidth + dragX
+                    }
+            )
+        }
+
         basePhoto?.let { photo ->
             PhotoCard(
                 photo = photo,
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
-                        translationX = dragX
+                        translationX = dragX + entryX
                         translationY = dragY.coerceAtMost(0f)
                         scaleX = currentScale
                         scaleY = currentScale
