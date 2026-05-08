@@ -613,7 +613,6 @@ private fun ColumnScope.SwipeStage(
                 animatedCard = AnimatedCard(photo = incomingPhoto, motion = motion, startX = startX)
                 val updated = updateState()
                 if (updated) {
-                    resetGesture()
                     progress.animateTo(
                         targetValue = 1f,
                         animationSpec = tween(
@@ -745,7 +744,7 @@ private fun ColumnScope.SwipeStage(
                                         }
                                     )
                                 } else {
-                                    resetGesture()
+                                    springBack()
                                 }
                             }
                             GestureDirection.Up -> {
