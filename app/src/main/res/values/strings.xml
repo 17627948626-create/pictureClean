@@ -1,10 +1,10 @@
 <resources>
-    <string name="app_name">一划</string>
+    <string name="app_name">Swiply</string>
     <string name="unknown_photo_name">未知</string>
-    <string name="permission_screen_title">一划 · 相册瘦身</string>
-    <string name="permission_rationale">一划需要读取您的照片，才能帮您整理相册。</string>
-    <string name="permission_initial_request">请在弹窗中授权访问相册，让一划帮您轻松整理照片。</string>
-    <string name="permission_denied_message">相册权限未开启。一划只能在您授权后读取并整理照片。</string>
+    <string name="permission_screen_title">Swiply · 相册瘦身</string>
+    <string name="permission_rationale">Swiply 需要读取您的照片，才能帮您整理相册。</string>
+    <string name="permission_initial_request">请在弹窗中授权访问相册，让 Swiply 帮您轻松整理照片。</string>
+    <string name="permission_denied_message">相册权限未开启。Swiply 只能在您授权后读取并整理照片。</string>
     <string name="permission_grant">授权访问</string>
     <string name="permission_retry">重新申请授权</string>
     <string name="permission_open_settings">打开系统设置</string>

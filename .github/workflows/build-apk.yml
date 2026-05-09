@@ -121,7 +121,7 @@ jobs:
           DOWNLOAD="https://github.com/${GITHUB_REPOSITORY}/releases/download/dev-${GITHUB_RUN_NUMBER}/YiHua-release-${GITHUB_RUN_NUMBER}.apk"
           curl -s -X POST "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=b7d012c7-ef01-44ca-8f7b-e72b6edb1077" \
             -H "Content-Type: application/json" \
-            -d "{\"msgtype\":\"text\",\"text\":{\"content\":\"✅ [一划] APK 构建成功\nBuild #${GITHUB_RUN_NUMBER}\nCommit: ${GITHUB_SHA:0:7}\n📦 下载：${DOWNLOAD}\"}}"
+            -d "{\"msgtype\":\"text\",\"text\":{\"content\":\"✅ [Swiply] APK 构建成功\nBuild #${GITHUB_RUN_NUMBER}\nCommit: ${GITHUB_SHA:0:7}\n📦 下载：${DOWNLOAD}\"}}"
 
       - name: Notify WeCom on failure
         if: failure()
@@ -129,4 +129,4 @@ jobs:
           DETAIL="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           curl -s -X POST "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=b7d012c7-ef01-44ca-8f7b-e72b6edb1077" \
             -H "Content-Type: application/json" \
-            -d "{\"msgtype\":\"text\",\"text\":{\"content\":\"❌ [一划] APK 构建失败\nBuild #${GITHUB_RUN_NUMBER}\nCommit: ${GITHUB_SHA:0:7}\n🔍 详情：${DETAIL}\"}}"
+            -d "{\"msgtype\":\"text\",\"text\":{\"content\":\"❌ [Swiply] APK 构建失败\nBuild #${GITHUB_RUN_NUMBER}\nCommit: ${GITHUB_SHA:0:7}\n🔍 详情：${DETAIL}\"}}"
