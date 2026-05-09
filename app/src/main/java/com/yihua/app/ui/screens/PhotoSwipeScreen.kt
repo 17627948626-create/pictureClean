@@ -579,15 +579,17 @@ private fun ColumnScope.SwipeStage(
             state.currentPhoto to state.visiblePhotos.getOrNull(state.currentIndex + 1)
     }
 
-    // Pre-warm Coil cache for next + next-next so consecutive fast swipes
-    // never have to wait for cold decode.
+    // Pre-warm Coil cache for neighbours so consecutive fast swipes
+    // never have to wait for cold decode (covers both left and right swipe).
     val context = LocalContext.current
     LaunchedEffect(state.currentIndex, state.visiblePhotos.size) {
         val requestOptions = photoImageRequestOptions()
         val loader = context.imageLoader
         listOfNotNull(
             state.visiblePhotos.getOrNull(state.currentIndex + 1),
-            state.visiblePhotos.getOrNull(state.currentIndex + 2)
+            state.visiblePhotos.getOrNull(state.currentIndex + 2),
+            state.visiblePhotos.getOrNull(state.currentIndex - 1),
+            state.visiblePhotos.getOrNull(state.currentIndex - 2)
         ).forEach { photo ->
             loader.enqueue(
                 ImageRequest.Builder(context)
