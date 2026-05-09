@@ -471,7 +471,7 @@ private fun ColumnScope.SwipeStage(
     var stageHeight by remember { mutableFloatStateOf(0f) }
     var animatedCard by remember { mutableStateOf<AnimatedCard?>(null) }
     var basePhotoDuringCoverIn by remember { mutableStateOf<Photo?>(null) }
-    var entryX by remember { mutableFloatStateOf(0f) }
+    var animationStartPeekT by remember { mutableFloatStateOf(0f) }
 
     fun setAnimationRunning(value: Boolean) {
         animationRunning = value
@@ -545,6 +545,7 @@ private fun ColumnScope.SwipeStage(
         startX: Float,
         startY: Float,
         startScale: Float = 1f,
+        peekStartT: Float,
         updateState: () -> Unit
     ) {
         scope.launch {
@@ -552,6 +553,7 @@ private fun ColumnScope.SwipeStage(
             gestureHandled = true
             try {
                 progress.snapTo(0f)
+                animationStartPeekT = peekStartT
                 animatedCard = AnimatedCard(
                     photo = photo,
                     motion = motion,
@@ -560,38 +562,19 @@ private fun ColumnScope.SwipeStage(
                     startScale = startScale
                 )
                 updateState()
-                val newEntryX = if (motion == CardMotion.FlyToLeft) stageWidth + startX else 0f
-                entryX = newEntryX
                 resetGesture()
-                val progressJob = launch {
-                    progress.animateTo(
-                        targetValue = 1f,
-                        animationSpec = tween(
-                            durationMillis = 150,
-                            easing = FastOutLinearInEasing
-                        )
+                progress.animateTo(
+                    targetValue = 1f,
+                    animationSpec = tween(
+                        durationMillis = 220,
+                        easing = FastOutLinearInEasing
                     )
-                }
-                if (newEntryX != 0f) {
-                    val entryAnim = Animatable(newEntryX)
-                    val entryJob = launch {
-                        entryAnim.animateTo(
-                            targetValue = 0f,
-                            animationSpec = tween(
-                                durationMillis = 150,
-                                easing = FastOutLinearInEasing
-                            )
-                        ) { entryX = value }
-                    }
-                    joinAll(progressJob, entryJob)
-                } else {
-                    progressJob.join()
-                }
+                )
             } finally {
-                entryX = 0f
                 resetGesture()
                 resetAnimationState()
                 progress.snapTo(0f)
+                animationStartPeekT = 0f
                 setAnimationRunning(false)
             }
         }
@@ -602,6 +585,8 @@ private fun ColumnScope.SwipeStage(
         currentPhoto: Photo?,
         motion: CardMotion,
         startX: Float = 0f,
+        startY: Float = 0f,
+        peekStartT: Float,
         updateState: () -> Boolean
     ) {
         scope.launch {
@@ -609,14 +594,20 @@ private fun ColumnScope.SwipeStage(
             gestureHandled = true
             try {
                 progress.snapTo(0f)
+                animationStartPeekT = peekStartT
                 basePhotoDuringCoverIn = currentPhoto
-                animatedCard = AnimatedCard(photo = incomingPhoto, motion = motion, startX = startX)
+                animatedCard = AnimatedCard(
+                    photo = incomingPhoto,
+                    motion = motion,
+                    startX = startX,
+                    startY = startY
+                )
                 val updated = updateState()
                 if (updated) {
                     progress.animateTo(
                         targetValue = 1f,
                         animationSpec = tween(
-                            durationMillis = 200,
+                            durationMillis = 220,
                             easing = LinearOutSlowInEasing
                         )
                     )
@@ -625,6 +616,7 @@ private fun ColumnScope.SwipeStage(
                 resetGesture()
                 resetAnimationState()
                 progress.snapTo(0f)
+                animationStartPeekT = 0f
                 setAnimationRunning(false)
             }
         }
@@ -698,7 +690,14 @@ private fun ColumnScope.SwipeStage(
                                 dragX = 0f
                                 dragY = totalY.coerceAtMost(0f)
                             }
-                            GestureDirection.Down,
+                            GestureDirection.Down -> {
+                                dragX = 0f
+                                dragY = if (state.canRestoreLastDeletedPhoto) {
+                                    totalY.coerceAtLeast(0f)
+                                } else {
+                                    edgeResistedDrag(totalY.coerceAtLeast(0f))
+                                }
+                            }
                             null -> {
                                 dragX = 0f
                                 dragY = 0f
@@ -723,6 +722,7 @@ private fun ColumnScope.SwipeStage(
                                         motion = CardMotion.FlyToLeft,
                                         startX = dragX,
                                         startY = 0f,
+                                        peekStartT = (abs(dragX) / SwipeTriggerPx).coerceIn(0f, 1f),
                                         updateState = onGoToNextPhoto
                                     )
                                 } else {
@@ -738,6 +738,7 @@ private fun ColumnScope.SwipeStage(
                                         currentPhoto = currentPhoto,
                                         motion = CardMotion.CoverFromLeft,
                                         startX = -stageWidth + dragX,
+                                        peekStartT = 1f - (abs(dragX) / SwipeTriggerPx).coerceIn(0f, 1f),
                                         updateState = {
                                             onGoToPreviousPhoto()
                                             true
@@ -756,6 +757,7 @@ private fun ColumnScope.SwipeStage(
                                         startX = 0f,
                                         startY = dragY,
                                         startScale = deletePreviewScale(dragY),
+                                        peekStartT = (abs(dragY) / SwipeTriggerPx).coerceIn(0f, 1f),
                                         updateState = onQueueCurrentPhotoForDeletion
                                     )
                                 } else {
@@ -772,10 +774,12 @@ private fun ColumnScope.SwipeStage(
                                         incomingPhoto = restoredPhoto,
                                         currentPhoto = currentPhoto,
                                         motion = CardMotion.CoverFromTop,
+                                        startY = -stageHeight + dragY,
+                                        peekStartT = 1f - (abs(dragY) / SwipeTriggerPx).coerceIn(0f, 1f),
                                         updateState = onRestoreLastDeletedPhoto
                                     )
                                 } else {
-                                    resetGesture()
+                                    springBack()
                                 }
                             }
                             null -> resetGesture()
@@ -785,36 +789,97 @@ private fun ColumnScope.SwipeStage(
             },
         contentAlignment = Alignment.Center
     ) {
-        val basePhoto = basePhotoDuringCoverIn ?: state.currentPhoto
-        val currentScale = deletePreviewScale(dragY)
-
-        // Neighbor card — renders behind current card to give real-time follow-finger feedback
-        val neighborPhoto = when (gestureDirection) {
-            GestureDirection.Left -> state.visiblePhotos.getOrNull(state.currentIndex + 1)
+        val hasOverlay = animatedCard != null
+        val isThrowAnim = hasOverlay && basePhotoDuringCoverIn == null
+        val isFlyBackAnim = hasOverlay && basePhotoDuringCoverIn != null
+        val incomingForFlyBack = when (gestureDirection) {
             GestureDirection.Right -> state.visiblePhotos.getOrNull(state.currentIndex - 1)
+            GestureDirection.Down -> state.deleteHistory.lastOrNull()?.photo
             else -> null
-        }.takeIf { !animationRunning }
-        neighborPhoto?.let { photo ->
+        }
+        // Only treat as fly-back when an incoming photo exists; otherwise it's an
+        // edge-bounce — render current as if throwing (so it just wobbles with resistance).
+        val isFlyBackDir = incomingForFlyBack != null
+        val isThrowDir = gestureDirection == GestureDirection.Left ||
+            gestureDirection == GestureDirection.Up
+
+        val peekPhoto = when {
+            isFlyBackAnim -> basePhotoDuringCoverIn
+            isThrowAnim -> state.currentPhoto
+            isFlyBackDir -> state.currentPhoto
+            else -> state.visiblePhotos.getOrNull(state.currentIndex + 1)
+        }
+
+        val centerPhoto = when {
+            hasOverlay -> null
+            isFlyBackDir -> incomingForFlyBack
+            else -> state.currentPhoto
+        }
+
+        peekPhoto?.let { photo ->
             PhotoCard(
                 photo = photo,
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
-                        translationX = if (dragX < 0) stageWidth + dragX else -stageWidth + dragX
+                        val mag = when (gestureDirection) {
+                            GestureDirection.Left, GestureDirection.Right -> abs(dragX)
+                            GestureDirection.Up, GestureDirection.Down -> abs(dragY)
+                            null -> 0f
+                        }
+                        val dragP = (mag / SwipeTriggerPx).coerceIn(0f, 1f)
+                        // Peek t formula must stay coupled with peekStartT captured at
+                        // release: anim phase begins exactly where the drag ended.
+                        //   throw drag: t = dragP   throw anim: t = startT + (1-startT)*p
+                        //   flyback drag: t = 1-dragP   flyback anim: t = startT*(1-p)
+                        // Edge-bounce (Right/Down with no incoming) renders as throw —
+                        // peek stays put at 0.
+                        val t = when {
+                            isThrowAnim ->
+                                animationStartPeekT + (1f - animationStartPeekT) * progress.value
+                            isFlyBackAnim ->
+                                animationStartPeekT * (1f - progress.value)
+                            isFlyBackDir -> 1f - dragP
+                            isThrowDir -> dragP
+                            else -> 0f
+                        }
+                        val peekX = stageWidth * PeekOffsetFraction
+                        val peekY = stageHeight * PeekOffsetFraction
+                        translationX = peekX * (1f - t)
+                        translationY = peekY * (1f - t)
+                        val s = PeekScale + (1f - PeekScale) * t
+                        scaleX = s
+                        scaleY = s
                     }
             )
         }
 
-        basePhoto?.let { photo ->
+        centerPhoto?.let { photo ->
             PhotoCard(
                 photo = photo,
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
-                        translationX = dragX + entryX
-                        translationY = dragY.coerceAtMost(0f)
-                        scaleX = currentScale
-                        scaleY = currentScale
+                        // Only true fly-back (incoming photo exists) slides the center
+                        // slot in from off-screen. Edge-bounce falls through to throw
+                        // mode so the current photo wobbles with edge resistance.
+                        when {
+                            isFlyBackDir && gestureDirection == GestureDirection.Right -> {
+                                translationX = -stageWidth + dragX
+                                translationY = 0f
+                            }
+                            isFlyBackDir && gestureDirection == GestureDirection.Down -> {
+                                translationX = 0f
+                                translationY = -stageHeight + dragY
+                            }
+                            else -> {
+                                translationX = dragX
+                                translationY = dragY.coerceAtMost(0f)
+                                val scale = deletePreviewScale(dragY)
+                                scaleX = scale
+                                scaleY = scale
+                            }
+                        }
                     }
             )
         }

@@ -6,6 +6,9 @@ private const val EdgeResistance = 0.28f
 private const val DeletePreviewDistancePx = 220f
 private const val DeletePreviewScaleReduction = 0.15f
 
+internal const val PeekOffsetFraction = 0.06f
+internal const val PeekScale = 0.94f
+
 internal enum class CardMotion {
     FlyToLeft,
     FlyToTop,
@@ -70,7 +73,7 @@ internal fun flyOutTransform(
         )
         CardMotion.CoverFromTop -> SwipeTransform(
             translationX = 0f,
-            translationY = -height * (1f - clampedProgress),
+            translationY = startY * (1f - clampedProgress),
             scale = 1f
         )
     }
