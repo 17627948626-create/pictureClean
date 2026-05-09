@@ -67,6 +67,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import coil.imageLoader
 import coil.request.ImageRequest
 import coil.size.Precision
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
@@ -558,21 +559,48 @@ private fun ColumnScope.SwipeStage(
     }
 
     // ── front / back photo resolution ─────────────────────────────────────
+    // Static state and Left/Up share the same back (= next photo). Keeping
+    // back rendered when idle means Coil has it loaded by the time the user
+    // starts a swipe — no blank flash on fast successive swipes.
     val (front, back) = throwSnapshot?.let { snap ->
         snap.front to snap.back
     } ?: when (gestureDirection) {
-        GestureDirection.Left ->
-            state.currentPhoto to state.visiblePhotos.getOrNull(state.currentIndex + 1)
+        GestureDirection.Right ->
+            state.visiblePhotos.getOrNull(state.currentIndex - 1) to state.currentPhoto
+        GestureDirection.Down ->
+            state.deleteHistory.lastOrNull()?.photo to state.currentPhoto
         GestureDirection.Up ->
             state.currentPhoto to (
                 state.visiblePhotos.getOrNull(state.currentIndex + 1)
                     ?: state.visiblePhotos.getOrNull(state.currentIndex - 1)
             )
-        GestureDirection.Right ->
-            state.visiblePhotos.getOrNull(state.currentIndex - 1) to state.currentPhoto
-        GestureDirection.Down ->
-            state.deleteHistory.lastOrNull()?.photo to state.currentPhoto
-        null -> state.currentPhoto to null
+        // Left and null (idle) share the same layout: current on top, next behind.
+        GestureDirection.Left, null ->
+            state.currentPhoto to state.visiblePhotos.getOrNull(state.currentIndex + 1)
+    }
+
+    // Pre-warm Coil cache for next + next-next so consecutive fast swipes
+    // never have to wait for cold decode.
+    val context = LocalContext.current
+    LaunchedEffect(state.currentIndex, state.visiblePhotos.size) {
+        val requestOptions = photoImageRequestOptions()
+        val loader = context.imageLoader
+        listOfNotNull(
+            state.visiblePhotos.getOrNull(state.currentIndex + 1),
+            state.visiblePhotos.getOrNull(state.currentIndex + 2)
+        ).forEach { photo ->
+            loader.enqueue(
+                ImageRequest.Builder(context)
+                    .data(photo.uri)
+                    .memoryCacheKey("${requestOptions.memoryCacheKeyPrefix}-${photo.id}")
+                    .diskCacheKey("${requestOptions.memoryCacheKeyPrefix}-${photo.id}")
+                    .allowHardware(requestOptions.allowHardware)
+                    .precision(if (requestOptions.precisionInexact) Precision.INEXACT else Precision.EXACT)
+                    .scale(requestOptions.scale)
+                    .size(1440, 2560)
+                    .build()
+            )
+        }
     }
 
     Box(
