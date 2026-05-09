@@ -53,6 +53,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -843,20 +845,34 @@ private fun PhotoCard(
 ) {
     val context = LocalContext.current
     val requestOptions = photoImageRequestOptions()
-    AsyncImage(
-        model = ImageRequest.Builder(context)
-            .data(photo.uri)
-            .memoryCacheKey("${requestOptions.memoryCacheKeyPrefix}-${photo.id}")
-            .diskCacheKey("${requestOptions.memoryCacheKeyPrefix}-${photo.id}")
-            .allowHardware(requestOptions.allowHardware)
-            .precision(if (requestOptions.precisionInexact) Precision.INEXACT else Precision.EXACT)
-            .scale(requestOptions.scale)
-            .size(1440, 2560)
-            .build(),
-        contentDescription = photo.displayName,
-        contentScale = ContentScale.Fit,
-        modifier = modifier
-    )
+    val imageRequest = ImageRequest.Builder(context)
+        .data(photo.uri)
+        .memoryCacheKey("${requestOptions.memoryCacheKeyPrefix}-${photo.id}")
+        .diskCacheKey("${requestOptions.memoryCacheKeyPrefix}-${photo.id}")
+        .allowHardware(requestOptions.allowHardware)
+        .precision(if (requestOptions.precisionInexact) Precision.INEXACT else Precision.EXACT)
+        .scale(requestOptions.scale)
+        .size(1440, 2560)
+        .build()
+    Box(modifier = modifier) {
+        // Blurred background fill — covers letterbox areas so back card never bleeds through
+        AsyncImage(
+            model = imageRequest,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .fillMaxSize()
+                .blur(28.dp)
+                .alpha(0.55f)
+        )
+        // Sharp foreground, full aspect ratio
+        AsyncImage(
+            model = imageRequest,
+            contentDescription = photo.displayName,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.fillMaxSize()
+        )
+    }
 }
 
 @Composable
