@@ -129,33 +129,19 @@ jobs:
 
             > Debug APK 仅供测试；若 Release APK 存在则签名稳定，可直接覆盖安装。
 
-      # ── 飞书通知 ──────────────────────────────────────────────────────
-      - name: Notify Feishu on success
+      # ── 企业微信通知（复用 ETF_monitor 同一群）────────────────────────
+      - name: Notify WeCom on success
         if: success()
-        env:
-          FEISHU_WEBHOOK: ${{ secrets.FEISHU_BOT_WEBHOOK }}
         run: |
-          if [ -z "$FEISHU_WEBHOOK" ]; then exit 0; fi
-          curl -s -X POST "$FEISHU_WEBHOOK" \
+          DOWNLOAD="https://github.com/${GITHUB_REPOSITORY}/releases/download/dev-${GITHUB_RUN_NUMBER}/YiHua-debug-${GITHUB_RUN_NUMBER}.apk"
+          curl -s -X POST "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=b7d012c7-ef01-44ca-8f7b-e72b6edb1077" \
             -H "Content-Type: application/json" \
-            -d "{
-              \"msg_type\": \"text\",
-              \"content\": {
-                \"text\": \"✅ APK 构建成功\nBuild #${GITHUB_RUN_NUMBER}\nCommit: ${GITHUB_SHA}\nRelease: https://github.com/${GITHUB_REPOSITORY}/releases/tag/dev-${GITHUB_RUN_NUMBER}\"
-              }
-            }"
+            -d "{\"msgtype\":\"text\",\"text\":{\"content\":\"✅ [一画] APK 构建成功\nBuild #${GITHUB_RUN_NUMBER}\nCommit: ${GITHUB_SHA:0:7}\n📦 下载：${DOWNLOAD}\"}}"
 
-      - name: Notify Feishu on failure
+      - name: Notify WeCom on failure
         if: failure()
-        env:
-          FEISHU_WEBHOOK: ${{ secrets.FEISHU_BOT_WEBHOOK }}
         run: |
-          if [ -z "$FEISHU_WEBHOOK" ]; then exit 0; fi
-          curl -s -X POST "$FEISHU_WEBHOOK" \
+          DETAIL="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          curl -s -X POST "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=b7d012c7-ef01-44ca-8f7b-e72b6edb1077" \
             -H "Content-Type: application/json" \
-            -d "{
-              \"msg_type\": \"text\",
-              \"content\": {
-                \"text\": \"❌ APK 构建失败\nBuild #${GITHUB_RUN_NUMBER}\nCommit: ${GITHUB_SHA}\n详情: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"
-              }
-            }"
+            -d "{\"msgtype\":\"text\",\"text\":{\"content\":\"❌ [一画] APK 构建失败\nBuild #${GITHUB_RUN_NUMBER}\nCommit: ${GITHUB_SHA:0:7}\n🔍 详情：${DETAIL}\"}}"
