@@ -78,11 +78,27 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: ./gradlew :app:assembleRelease --no-daemon
 
+      - name: Build signed release AAB
+        if: steps.signing.outputs.available == 'true'
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+          SIGNING_KEYSTORE_PATH: /tmp/release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew :app:bundleRelease --no-daemon
+
       - name: Rename release APK
         if: steps.signing.outputs.available == 'true'
         run: |
           cp app/build/outputs/apk/release/app-release.apk \
              YiHua-release-${{ github.run_number }}.apk
+
+      - name: Rename release AAB
+        if: steps.signing.outputs.available == 'true'
+        run: |
+          cp app/build/outputs/bundle/release/app-release.aab \
+             Swiply-release-${{ github.run_number }}.aab
 
       - name: Clean up keystore
         if: always()
@@ -97,6 +113,14 @@ jobs:
           path: YiHua-release-${{ github.run_number }}.apk
           retention-days: 30
 
+      - name: Upload release AAB artifact
+        if: steps.signing.outputs.available == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Swiply-release-${{ github.run_number }}-aab
+          path: Swiply-release-${{ github.run_number }}.aab
+          retention-days: 30
+
       # ── GitHub Release ────────────────────────────────────────────────
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -107,12 +131,14 @@ jobs:
           fail_on_unmatched_files: false
           files: |
             YiHua-release-${{ github.run_number }}.apk
+            Swiply-release-${{ github.run_number }}.aab
           body: |
             🤖 自动构建
 
             - **Build:** #${{ github.run_number }}
             - **Commit:** ${{ github.sha }}
             - **Branch:** ${{ github.ref_name }}
+            - **Google Play:** 请上传 `Swiply-release-${{ github.run_number }}.aab`
 
       # ── 企业微信通知（复用 ETF_monitor 同一群）────────────────────────
       - name: Notify WeCom on success
