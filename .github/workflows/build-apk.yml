@@ -92,7 +92,7 @@ jobs:
         if: steps.signing.outputs.available == 'true'
         run: |
           cp app/build/outputs/apk/release/app-release.apk \
-             YiHua-release-${{ github.run_number }}.apk
+             Swiply-release-${{ github.run_number }}.apk
 
       - name: Rename release AAB
         if: steps.signing.outputs.available == 'true'
@@ -109,8 +109,8 @@ jobs:
         if: steps.signing.outputs.available == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: YiHua-release-${{ github.run_number }}
-          path: YiHua-release-${{ github.run_number }}.apk
+          name: Swiply-release-${{ github.run_number }}
+          path: Swiply-release-${{ github.run_number }}.apk
           retention-days: 30
 
       - name: Upload release AAB artifact
@@ -123,6 +123,7 @@ jobs:
 
       # ── GitHub Release ────────────────────────────────────────────────
       - name: Create GitHub Release
+        if: steps.signing.outputs.available == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: dev-${{ github.run_number }}
@@ -144,7 +145,7 @@ jobs:
       - name: Notify WeCom on success
         if: success()
         run: |
-          DOWNLOAD="https://github.com/${GITHUB_REPOSITORY}/releases/download/dev-${GITHUB_RUN_NUMBER}/YiHua-release-${GITHUB_RUN_NUMBER}.apk"
+          DOWNLOAD="https://github.com/${GITHUB_REPOSITORY}/releases/download/dev-${GITHUB_RUN_NUMBER}/Swiply-release-${GITHUB_RUN_NUMBER}.apk"
           curl -s -X POST "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=b7d012c7-ef01-44ca-8f7b-e72b6edb1077" \
             -H "Content-Type: application/json" \
             -d "{\"msgtype\":\"text\",\"text\":{\"content\":\"✅ [Swiply] APK 构建成功\nBuild #${GITHUB_RUN_NUMBER}\nCommit: ${GITHUB_SHA:0:7}\n📦 下载：${DOWNLOAD}\"}}"
