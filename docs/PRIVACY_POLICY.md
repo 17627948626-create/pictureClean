@@ -1,73 +1,69 @@
-# 隐私政策
+# Privacy Policy
 
-最后更新：2026-05-05
+Last updated: May 14, 2026
 
-一划是一款本地照片清理工具。我们重视用户隐私，并尽量减少数据访问范围。
+Swiply is a local photo cleaning app. We care about user privacy and keep data access limited to what is necessary for the app to work.
 
-## 我们访问哪些数据
+## Data We Access
 
-一划会在用户授权后访问设备相册中的照片，用于在应用内展示照片、判断用户选择、加入待删除队列和发起系统删除确认。
+After you grant permission, Swiply can access photos in your device photo library. This access is used to show photos in the app, let you review them, add photos to a delete queue, restore recently queued photos, and start the system deletion confirmation flow.
 
-在 Android 13 及以上版本，一划会请求系统照片权限。用户也可以只授权访问部分照片。
+On Android 13 and later, Swiply requests the system photo permission. On supported Android versions, you may choose to grant access only to selected photos.
 
-## 我们如何使用照片数据
+## How We Use Photo Data
 
-照片数据仅用于以下功能：
+Photo data is used only for the following app features:
 
-- 在应用内展示用户授权访问的照片。
-- 让用户通过滑动决定保留、跳过、加入待删除队列或恢复误删。
-- 在用户确认后，通过 Android 系统能力发起照片删除流程。
+- Showing photos that you have allowed the app to access.
+- Letting you swipe to keep, skip, queue for deletion, or restore photos.
+- Starting the Android system deletion process after you confirm deletion.
 
-## 我们不会做什么
+## What We Do Not Do
 
-一划不会：
+Swiply does not:
 
-- 上传用户照片。
-- 将照片发送到服务器。
-- 出售、共享或交易用户照片。
-- 使用照片训练模型。
-- 在后台扫描用户未授权的照片。
+- Upload your photos.
+- Send your photos to a server.
+- Sell, share, or trade your photos.
+- Use your photos to train machine learning models.
+- Scan photos in the background without your permission.
 
-## 数据存储
+## Data Storage
 
-一划主要在设备本地运行。
+Swiply mainly runs locally on your device.
 
-应用可能会在本地保存少量使用状态，例如当前浏览位置、待删除队列状态或界面状态。这些数据仅用于改善应用体验，不会上传到服务器。
+The app may store a small amount of local state, such as the current browsing position, delete queue state, or interface state. This information is used only to support the app experience and is not uploaded to a server.
 
-## 第三方服务
+## Third-Party Services
 
-一划当前不使用第三方分析 SDK、广告 SDK 或云端照片处理服务。
+Swiply currently does not use third-party analytics SDKs, advertising SDKs, or cloud photo processing services.
 
-如果未来加入相关服务，本隐私政策会先更新，并说明新增数据用途。
+If these services are added in the future, this Privacy Policy will be updated before the change is released, and the new data use will be explained.
 
-## 删除数据
+## Deleting Data
 
-用户可以通过以下方式删除或清除数据：
+You can delete or clear data in the following ways:
 
-- 在应用内确认删除待删除队列中的照片。
-- 在 Android 系统设置中清除一划的应用数据。
-- 卸载一划。
+- Confirm deletion of photos in the app's delete queue.
+- Clear Swiply's app data in Android system settings.
+- Uninstall Swiply.
 
-照片删除由 Android 系统完成。一划不会绕过系统确认流程。
+Photo deletion is handled by the Android system. Swiply does not bypass the system confirmation process.
 
-## 权限说明
+## Permissions
 
-一划请求照片访问权限，是为了读取并展示用户授权的照片。没有照片权限时，应用无法执行相册清理功能。
+Swiply requests photo access permission so it can read and display photos that you authorize. Without photo permission, the app cannot provide its photo cleaning features.
 
-用户可以在系统设置中随时撤销照片权限。
+You can revoke photo permission at any time in Android system settings.
 
-## 儿童隐私
+## Children's Privacy
 
-一划不是面向儿童的应用。我们不会有意收集儿童个人信息。
+Swiply is not directed to children. We do not knowingly collect personal information from children.
 
-## 政策更新
+## Policy Updates
 
-如果隐私政策发生变化，我们会更新本文档中的“最后更新”日期。
+If this Privacy Policy changes, we will update the "Last updated" date at the top of this document.
 
-## 联系方式
+## Contact
 
-如需咨询隐私相关问题，请通过应用发布页面或仓库 Issues 联系开发者。
-
-## Google Play 上架说明
-
-发布前必须将本隐私政策发布到公网地址。
+For privacy questions, please contact the developer through the app listing page or the repository Issues page.
