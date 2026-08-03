@@ -9,8 +9,8 @@ import com.yihua.app.ui.theme.YiHuaTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        super.onCreate(savedInstanceState)
         setContent {
             YiHuaTheme {
                 AppNavigation()

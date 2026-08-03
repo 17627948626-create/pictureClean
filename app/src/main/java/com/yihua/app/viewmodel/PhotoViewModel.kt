@@ -153,6 +153,11 @@ class PhotoViewModel(
         prefs.edit().putInt(KEY_CURRENT_INDEX, index).apply()
     }
 
+    fun loadPhotosIfNeeded() {
+        if (_uiState.value.screenState != PhotoListState.Loading) return
+        loadPhotos()
+    }
+
     fun loadPhotos() {
         viewModelScope.launch {
             _uiState.update {

@@ -65,6 +65,25 @@ class DeleteQueueContractTest {
         assertEquals(PhotoListState.Reviewable, state.screenState)
     }
 
+    @Test
+    fun `returning to swipe screen keeps queued photos`() {
+        val photos = listOf(
+            Photo(1L, Uri.parse("content://media/external/images/media/1"), "photo_1.jpg", 1L, 1000L),
+            Photo(2L, Uri.parse("content://media/external/images/media/2"), "photo_2.jpg", 2L, 1000L)
+        )
+        val prefs = app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val vm = PhotoViewModel(app, QueueDeleteFakePhotoDataSource(photos), prefs)
+
+        vm.loadPhotosIfNeeded()
+        vm.queueCurrentPhotoForDeletion()
+        val queuedBeforeReturn = vm.uiState.value.deleteQueue
+
+        vm.loadPhotosIfNeeded()
+
+        assertEquals(queuedBeforeReturn, vm.uiState.value.deleteQueue)
+        assertEquals(1, vm.uiState.value.deleteHistory.size)
+    }
+
     companion object {
         private const val PREFS_NAME = "delete_queue_contract_test_prefs"
     }

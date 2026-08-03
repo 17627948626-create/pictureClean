@@ -53,7 +53,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -149,7 +148,7 @@ fun PhotoSwipeScreen(
     }
 
     LaunchedEffect(hasAnyAccess) {
-        if (hasAnyAccess) viewModel.loadPhotos()
+        if (hasAnyAccess) viewModel.loadPhotosIfNeeded()
     }
 
     when {
@@ -854,20 +853,8 @@ private fun PhotoCard(
         .size(1440, 2560)
         .build()
     Box(
-        modifier = modifier.background(Color.Black)
+        modifier = modifier.background(AppleSystemGray6)
     ) {
-        // Opaque blurred fill. This must stay fully opaque so the pre-rendered
-        // back photo can never bleed through letterbox areas.
-        AsyncImage(
-            model = imageRequest,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .fillMaxSize()
-                .blur(28.dp)
-        )
-
-        // Sharp foreground keeps the original aspect ratio.
         AsyncImage(
             model = imageRequest,
             contentDescription = photo.displayName,

@@ -131,7 +131,7 @@ jobs:
           prerelease: true
           fail_on_unmatched_files: false
           files: |
-            YiHua-release-${{ github.run_number }}.apk
+            Swiply-release-${{ github.run_number }}.apk
             Swiply-release-${{ github.run_number }}.aab
           body: |
             🤖 自动构建
