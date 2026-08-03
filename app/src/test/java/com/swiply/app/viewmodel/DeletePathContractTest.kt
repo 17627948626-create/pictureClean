@@ -1,7 +1,7 @@
-package com.yihua.app.viewmodel
+package com.swiply.app.viewmodel
 
 import android.net.Uri
-import com.yihua.app.data.Photo
+import com.swiply.app.data.Photo
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

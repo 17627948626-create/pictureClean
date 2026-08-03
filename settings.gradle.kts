@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "YiHua"
+rootProject.name = "Swiply"
 include(":app")

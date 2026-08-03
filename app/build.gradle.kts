@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.yihua.app"
+    namespace = "com.swiply.app"
     compileSdk = 35
 
     defaultConfig {

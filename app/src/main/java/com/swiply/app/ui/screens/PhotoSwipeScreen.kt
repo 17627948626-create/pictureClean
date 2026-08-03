@@ -1,4 +1,4 @@
-package com.yihua.app.ui.screens
+package com.swiply.app.ui.screens
 
 import android.content.Intent
 import android.net.Uri
@@ -73,16 +73,16 @@ import coil.size.Precision
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
-import com.yihua.app.R
-import com.yihua.app.data.Photo
-import com.yihua.app.ui.theme.AppleSystemGray6
-import com.yihua.app.ui.theme.LightGrayText
-import com.yihua.app.ui.theme.SwipeUpColor
-import com.yihua.app.ui.theme.ThumbnailHighlight
-import com.yihua.app.ui.theme.TrashBadgeColor
-import com.yihua.app.viewmodel.PhotoListState
-import com.yihua.app.viewmodel.PhotoUiState
-import com.yihua.app.viewmodel.PhotoViewModel
+import com.swiply.app.R
+import com.swiply.app.data.Photo
+import com.swiply.app.ui.theme.AppleSystemGray6
+import com.swiply.app.ui.theme.LightGrayText
+import com.swiply.app.ui.theme.SwipeUpColor
+import com.swiply.app.ui.theme.ThumbnailHighlight
+import com.swiply.app.ui.theme.TrashBadgeColor
+import com.swiply.app.viewmodel.PhotoListState
+import com.swiply.app.viewmodel.PhotoUiState
+import com.swiply.app.viewmodel.PhotoViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale

@@ -1,9 +1,9 @@
-package com.yihua.app.data
+package com.swiply.app.data
 
 import android.content.ContentUris
 import android.content.Context
 import android.provider.MediaStore
-import com.yihua.app.R
+import com.swiply.app.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 

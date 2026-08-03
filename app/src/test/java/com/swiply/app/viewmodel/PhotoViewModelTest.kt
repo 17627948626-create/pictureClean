@@ -1,11 +1,11 @@
-package com.yihua.app.viewmodel
+package com.swiply.app.viewmodel
 
 import android.app.Application
 import android.content.Context
 import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
-import com.yihua.app.data.Photo
-import com.yihua.app.data.PhotoDataSource
+import com.swiply.app.data.Photo
+import com.swiply.app.data.PhotoDataSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher

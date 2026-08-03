@@ -1,13 +1,13 @@
-package com.yihua.app.ui.navigation
+package com.swiply.app.ui.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.yihua.app.ui.screens.DeleteConfirmScreen
-import com.yihua.app.ui.screens.PhotoSwipeScreen
-import com.yihua.app.viewmodel.PhotoViewModel
+import com.swiply.app.ui.screens.DeleteConfirmScreen
+import com.swiply.app.ui.screens.PhotoSwipeScreen
+import com.swiply.app.viewmodel.PhotoViewModel
 
 sealed class Screen(val route: String) {
     object PhotoSwipe : Screen("photo_swipe")

@@ -1,4 +1,4 @@
-package com.yihua.app.data
+package com.swiply.app.data
 
 import android.net.Uri
 

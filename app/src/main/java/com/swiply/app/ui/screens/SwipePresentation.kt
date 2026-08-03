@@ -1,4 +1,4 @@
-package com.yihua.app.ui.screens
+package com.swiply.app.ui.screens
 
 import coil.size.Scale
 

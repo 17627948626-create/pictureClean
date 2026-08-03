@@ -1,4 +1,4 @@
-# pictureClean / 一划
+# Swiply
 
 Android 照片快速清理 App。核心目标是让用户用最少的动作完成照片去留判断。
 
@@ -72,7 +72,7 @@ Release APK 签名需要配置以下 GitHub Actions secrets：
 |--------|------|
 | `ANDROID_KEYSTORE_BASE64` | keystore 的 Base64 字符串 |
 | `ANDROID_KEYSTORE_PASSWORD` | keystore 的 store 密码 |
-| `ANDROID_KEY_ALIAS` | keystore alias，例如 `yihua` |
+| `ANDROID_KEY_ALIAS` | keystore alias，例如 `swiply` |
 | `ANDROID_KEY_PASSWORD` | alias 对应的 key 密码 |
 | `FEISHU_BOT_WEBHOOK` | 可选，构建通知 |
 

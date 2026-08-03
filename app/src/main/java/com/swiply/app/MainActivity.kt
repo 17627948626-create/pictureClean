@@ -1,18 +1,18 @@
-package com.yihua.app
+package com.swiply.app
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import com.yihua.app.ui.navigation.AppNavigation
-import com.yihua.app.ui.theme.YiHuaTheme
+import com.swiply.app.ui.navigation.AppNavigation
+import com.swiply.app.ui.theme.SwiplyTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContent {
-            YiHuaTheme {
+            SwiplyTheme {
                 AppNavigation()
             }
         }

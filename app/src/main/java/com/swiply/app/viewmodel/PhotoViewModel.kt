@@ -1,4 +1,4 @@
-package com.yihua.app.viewmodel
+package com.swiply.app.viewmodel
 
 import android.app.Application
 import android.app.RecoverableSecurityException
@@ -11,10 +11,10 @@ import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.yihua.app.R
-import com.yihua.app.data.Photo
-import com.yihua.app.data.PhotoDataSource
-import com.yihua.app.data.PhotoRepository
+import com.swiply.app.R
+import com.swiply.app.data.Photo
+import com.swiply.app.data.PhotoDataSource
+import com.swiply.app.data.PhotoRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -109,7 +109,7 @@ class PhotoViewModel(
     )
 
     companion object {
-        private const val PREFS_NAME = "yihua_prefs"
+        private const val PREFS_NAME = "swiply_prefs"
         private const val KEY_CURRENT_INDEX = "current_index"
         private const val TAG = "PhotoViewModel"
 

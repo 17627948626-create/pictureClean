@@ -163,7 +163,7 @@
 
 **问题**：Debug 包可用不等于 Release 可上架。混淆、签名、资源压缩、权限声明、targetSdk、删除弹窗都可能在 Release 暴露问题。
 
-**已完成**：GitHub Actions Build APK #87 已成功；生成并上传 `YiHua-debug-87` 和 `YiHua-release-87`；GitHub Release `dev-87` 已创建；用户已确认真机 Release 验证 OK。
+**已完成**：GitHub Actions Build APK #87 已成功；生成并上传 `Swiply-debug-87` 和 `Swiply-release-87`；GitHub Release `dev-87` 已创建；用户已确认真机 Release 验证 OK。
 **验证记录**：2026-05-14：GitHub Actions Build APK #113 成功；unit tests、Android Lint、signed release APK、signed release AAB、artifact upload、GitHub Release 均通过。AAB artifact 为 Swiply-release-113-aab。
 
 **方案**：构建 Release APK/AAB；配置正式签名；检查版本号、包名、SDK；运行测试和 lint；真机安装 Release 包回归权限、加载、左右滑、上划删除、下划恢复、确认删除、系统删除弹窗、删除后状态；保存验收记录。

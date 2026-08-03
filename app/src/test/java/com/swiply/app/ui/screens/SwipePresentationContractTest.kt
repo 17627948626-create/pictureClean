@@ -1,4 +1,4 @@
-package com.yihua.app.ui.screens
+package com.swiply.app.ui.screens
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue

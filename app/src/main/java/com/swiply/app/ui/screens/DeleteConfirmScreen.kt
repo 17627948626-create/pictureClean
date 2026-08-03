@@ -1,4 +1,4 @@
-package com.yihua.app.ui.screens
+package com.swiply.app.ui.screens
 
 import android.app.Activity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -60,13 +60,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import coil.size.Precision
-import com.yihua.app.R
-import com.yihua.app.data.Photo
-import com.yihua.app.ui.theme.AppleSystemGray6
-import com.yihua.app.ui.theme.LightGrayText
-import com.yihua.app.ui.theme.SwipeUpColor
-import com.yihua.app.viewmodel.DeleteResult
-import com.yihua.app.viewmodel.PhotoViewModel
+import com.swiply.app.R
+import com.swiply.app.data.Photo
+import com.swiply.app.ui.theme.AppleSystemGray6
+import com.swiply.app.ui.theme.LightGrayText
+import com.swiply.app.ui.theme.SwipeUpColor
+import com.swiply.app.viewmodel.DeleteResult
+import com.swiply.app.viewmodel.PhotoViewModel
 
 private enum class DeleteDialogState {
     None,

@@ -1,2 +1,2 @@
 # Add project specific ProGuard rules here.
--keep class com.yihua.app.** { *; }
+-keep class com.swiply.app.** { *; }
